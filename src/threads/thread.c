@@ -413,7 +413,11 @@ void thread_update_priority(struct thread *t){
 }
 
 void thread_update_all_priorities(void) {
+        // printf("UPDATEDDDDD ALL PRIORITIES 1111111111111111\n");
+
   thread_foreach(&thread_update_priority, NULL);
+      // printf("UPDATEDDDDD ALL PRIORITIES 22222222222\n");
+
 }
 /* Idle thread.  Executes when no other thread is ready to run.
 

@@ -195,56 +195,61 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+
   if (thread_mlfqs){
-    printf("INSIDE THREADMLFQS\n");
-    struct real new_recent_cpu =thread_current()->recent_cpu;
-    new_recent_cpu.value=new_recent_cpu.value+1;
+    // enum intr_level old_level=intr_disable();
+    // printf("INSIDE THREADMLFQS\n");
+    struct real new_recent_cpu =add_real_to_int(thread_current()->recent_cpu,1);
     thread_current()->recent_cpu=new_recent_cpu;
     if (ticks%4==0){
       // loop over all threads and update the priority
-      printf("UPDATE PRIORITIES\n");
-      intr_disable();
+      // printf("UPDATE PRIORITIES\n");
+      // enum intr_level old_level=intr_disable();
+      // printf("AHAHAHA");
       thread_update_all_priorities();
-      intr_enable();
-      printf("OUTSIDE UPDATE PRIORITIES\n");
+      // printf("UPDATEDDDDD ALL PRIORITIES\n");
+      // intr_set_level(old_level);
+      // intr_enable();
+      // printf("OUTSIDE UPDATE PRIORITIES\n");
 
     }
-    else if (ticks%TIMER_FREQ==0){
+    if (ticks%TIMER_FREQ==0){
       // update load_avg
-            printf("INSIDE UPDATE LOADAVG\n");
-      intr_disable();
-
+            // printf("INSIDE UPDATE LOADAVG\n");
+      // intr_disable();
+      // enum intr_level old_level=intr_disable();
       thread_update_load_avg();
-            printf("OUTSIDE UPDATE LOADAVG\n");
+            // printf("OUTSIDE UPDATE LOADAVG\n");
 
       // update recent cpu  for all threads
-            printf("ISNIDE UPDATE CPUS\n");
+            // printf("ISNIDE UPDATE CPUS\n");
 
       thread_update_all_recent_cpus();
-            printf("OUTSIDE UPDATE CPUS\n");
-      intr_enable();
+            // printf("OUTSIDE UPDATE CPUS\n");
+          // intr_set_level(old_level);
+
+      // intr_enable();
     }
+
   }
-  else {
+  if (list_empty(&blocked))
+  {
+    return;
+  }
+
+  struct list_elem *head = list_begin(&blocked);
+  struct thread *headThread = list_entry(head, struct thread, elem);
+
+  while (headThread->wakeup <= timer_ticks())
+  {
+    list_pop_front(&blocked);
+    thread_unblock(headThread);
     if (list_empty(&blocked))
     {
       return;
     }
-
-    struct list_elem *head = list_begin(&blocked);
-    struct thread *headThread = list_entry(head, struct thread, elem);
-
-    while (headThread->wakeup <= timer_ticks())
-    {
-      list_pop_front(&blocked);
-      thread_unblock(headThread);
-      if (list_empty(&blocked))
-      {
-        return;
-      }
-      head = list_begin(&blocked);
-      headThread = list_entry(head, struct thread, elem);
-    }
+    head = list_begin(&blocked);
+    headThread = list_entry(head, struct thread, elem);
   }
 }
 
