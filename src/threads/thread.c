@@ -46,6 +46,11 @@ struct kernel_thread_frame
     void *aux;                  /* Auxiliary data for function. */
   };
 
+bool thread_compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux){
+  struct thread *thread_a = list_entry(a, struct thread, elem);
+  struct thread *thread_b = list_entry(b, struct thread, elem);
+  return thread_a->priority < thread_b->priority;
+}
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -529,13 +534,14 @@ next_thread_to_run (void)
     return idle_thread;
   else{
     if (thread_mlfqs){ // mlfqs
-        
+      // get highest priority from all ready threads
+      struct list_elem *max_elem = list_max(&ready_list, &thread_compare_priority, NULL);
+      return list_entry(max_elem, struct thread, elem);
     }
     else // priority scheduler 
       return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }
-
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
