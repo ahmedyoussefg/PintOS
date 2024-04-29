@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -36,7 +37,7 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
-
+struct real load_avg={0};
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
   {
@@ -350,32 +351,65 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   /* Not yet implemented. */
+  struct thread * current =thread_current();
+  current->nice=nice;
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return convert_real_to_int_round_nearest(multiply_real_by_int(load_avg,100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return convert_real_to_int_round_nearest(multiply_real_by_int(thread_current()->recent_cpu,100));
+}
+
+/* Function updates load average, called every second*/
+void
+thread_update_load_avg(void) {
+  int ready_threads_number=list_size(&ready_list);
+  struct real fraction_59_60= divide_real_by_int(convert_int_to_real(59),60);
+  struct real fraction_1_60= divide_real_by_int(convert_int_to_real(1),60);
+  struct real left =multiply_real_by_real(fraction_59_60,load_avg);
+  struct real right = multiply_real_by_int(fraction_59_60,ready_threads_number);
+  load_avg=add_real_to_real(left, right);
+}
+
+void thread_update_recent_cpu(struct thread *t){
+  if (t==idle_thread)
+    return;
+  struct real up = multiply_real_by_int (load_avg,2);
+  struct real down = add_real_to_int(up,1);
+  struct real left = multiply_real_by_real(divide_real_by_real(up,down),t->recent_cpu);
+  t->recent_cpu =add_real_to_int(left , t->nice);
+}
+void
+thread_update_all_recent_cpus(void) {
+  thread_foreach(&thread_update_recent_cpu, NULL);
+}
+
+void thread_update_priority(struct thread *t){
+  struct real second = divide_real_by_int(t->recent_cpu,4);
+  struct real pri_max = convert_int_to_real(PRI_MAX);
+  struct real result=sub_int_from_real(sub_real_from_real(pri_max,second),t->nice*2);
+  t->priority=convert_real_to_int_round_nearest(result);
 }
 
+void thread_update_all_priorities(void) {
+  thread_foreach(&thread_update_priority, NULL);
+}
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -462,6 +496,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->nice=0;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -492,8 +527,13 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  else{
+    if (thread_mlfqs){ // mlfqs
+        
+    }
+    else // priority scheduler 
+      return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
