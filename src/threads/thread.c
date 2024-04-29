@@ -191,6 +191,8 @@ thread_create (const char *name, int priority,
   kf->function = function;
   kf->aux = aux;
 
+
+printf("initialized thread: %s",t->name);
   /* Stack frame for switch_entry(). */
   ef = alloc_frame (t, sizeof *ef);
   ef->eip = (void (*) (void)) kernel_thread;
@@ -202,6 +204,8 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   // preemption
+  printf("current thread priority: %d\n", thread_current()->priority);
+  printf("new thread priority: %d\n", t->priority);
     if (thread_current()->priority < t->priority)
     {
       printf("thread_create: preemption\n");
@@ -505,6 +509,9 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
+  /*  printf("next_thread_to_run\n");
+   printf("current thread running : %d\n", thread_current()->name);
+   printf("next thread: %d\n", list_entry (list_begin (&ready_list), struct thread, elem)->name); */
   if (list_empty (&ready_list))
     return idle_thread;
   else
