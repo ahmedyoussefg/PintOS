@@ -539,7 +539,7 @@ next_thread_to_run (void)
       // get highest priority from all ready threads
       struct list_elem *max_elem = list_max(&ready_list, &thread_compare_priority, NULL);
       
-      return 
+      return list_entry(max_elem, struct thread, elem);
     }
     else // priority scheduler 
       return list_entry (list_pop_front (&ready_list), struct thread, elem);
