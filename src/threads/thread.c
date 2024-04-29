@@ -354,7 +354,20 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  /*
+  Invoked to do priority donation to change the priority of the current running thread.
+  When priority donation is done?
+  When a thread of a higher priority than the current running thread 
+  is blocked by the same lock of the thread which is running and already
+  acquires this lock,so the highest thread priority
+  donates its priority to the holder of the lock.
+ */
+  thread_current ()->priority = new_priority;/*Donation*/
+  struct lock *acquired_lock=&(thread_current()->locked_by);
+  /*When the current thread acquired lock is released, then pre-empt it
+  and recall its original priority*/
+  while(acquired_lock->holder != NULL);/*Waiting for the lock to be released*/
+  thread_yield();
 }
 
 /* Returns the current thread's priority. */
