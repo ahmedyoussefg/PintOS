@@ -194,6 +194,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  thread_tick ();
   if (thread_mlfqs){
     printf("INSIDE THREADMLFQS\n");
     struct real new_recent_cpu =thread_current()->recent_cpu;
@@ -224,28 +225,27 @@ timer_interrupt (struct intr_frame *args UNUSED)
       intr_enable();
     }
   }
-  thread_tick ();
-
-  if (list_empty(&blocked))
-  {
-    return;
-  }
-
-  struct list_elem *head = list_begin(&blocked);
-  struct thread *headThread = list_entry(head, struct thread, elem);
-
-  while (headThread->wakeup <= timer_ticks())
-  {
-    list_pop_front(&blocked);
-    thread_unblock(headThread);
+  else {
     if (list_empty(&blocked))
     {
       return;
     }
-    head = list_begin(&blocked);
-    headThread = list_entry(head, struct thread, elem);
-  }
 
+    struct list_elem *head = list_begin(&blocked);
+    struct thread *headThread = list_entry(head, struct thread, elem);
+
+    while (headThread->wakeup <= timer_ticks())
+    {
+      list_pop_front(&blocked);
+      thread_unblock(headThread);
+      if (list_empty(&blocked))
+      {
+        return;
+      }
+      head = list_begin(&blocked);
+      headThread = list_entry(head, struct thread, elem);
+    }
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
