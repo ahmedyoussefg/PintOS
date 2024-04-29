@@ -171,18 +171,33 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   if (thread_mlfqs){
+    printf("INSIDE THREADMLFQS\n");
     struct real new_recent_cpu =thread_current()->recent_cpu;
     new_recent_cpu.value=new_recent_cpu.value+1;
     thread_current()->recent_cpu=new_recent_cpu;
     if (ticks%4==0){
       // loop over all threads and update the priority
+      printf("UPDATE PRIORITIES\n");
+      intr_disable();
       thread_update_all_priorities();
+      intr_enable();
+      printf("OUTSIDE UPDATE PRIORITIES\n");
+
     }
-    else if (ticks%TIMER_FREQ){
+    else if (ticks%TIMER_FREQ==0){
       // update load_avg
+            printf("INSIDE UPDATE LOADAVG\n");
+      intr_disable();
+
       thread_update_load_avg();
+            printf("OUTSIDE UPDATE LOADAVG\n");
+
       // update recent cpu  for all threads
+            printf("ISNIDE UPDATE CPUS\n");
+
       thread_update_all_recent_cpus();
+            printf("OUTSIDE UPDATE CPUS\n");
+      intr_enable();
     }
   }
   thread_tick ();
