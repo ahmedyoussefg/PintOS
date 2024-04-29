@@ -393,8 +393,6 @@ thread_update_load_avg(void) {
 }
 
 void thread_update_recent_cpu(struct thread *t){
-  if (t==idle_thread)
-    return;
   struct real up = multiply_real_by_int (load_avg,2);
   struct real down = add_real_to_int(up,1);
   struct real left = multiply_real_by_real(divide_real_by_real(up,down),t->recent_cpu);
@@ -540,7 +538,8 @@ next_thread_to_run (void)
     if (thread_mlfqs){ // mlfqs
       // get highest priority from all ready threads
       struct list_elem *max_elem = list_max(&ready_list, &thread_compare_priority, NULL);
-      return list_entry(max_elem, struct thread, elem);
+      
+      return 
     }
     else // priority scheduler 
       return list_entry (list_pop_front (&ready_list), struct thread, elem);

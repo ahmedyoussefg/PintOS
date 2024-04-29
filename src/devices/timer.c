@@ -199,8 +199,11 @@ timer_interrupt (struct intr_frame *args UNUSED)
   if (thread_mlfqs){
     // enum intr_level old_level=intr_disable();
     // printf("INSIDE THREADMLFQS\n");
-    struct real new_recent_cpu =add_real_to_int(thread_current()->recent_cpu,1);
-    thread_current()->recent_cpu=new_recent_cpu;
+    struct thread * curr=thread_current();
+    if (strcmp(curr->name,"idle")!=0 && curr->status == THREAD_RUNNING){
+      struct real new_recent_cpu =add_real_to_int(curr->recent_cpu,1);
+      curr->recent_cpu=new_recent_cpu;
+    }
     if (ticks%4==0){
       // loop over all threads and update the priority
       // printf("UPDATE PRIORITIES\n");
