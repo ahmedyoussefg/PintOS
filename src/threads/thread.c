@@ -566,7 +566,7 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 void increment_recent_cpu(struct thread * t){
-  if (t==initial_thread)return;
+  if (t==idle_thread)return;
   struct real new_recent_cpu =add_real_to_int(t->recent_cpu,1);
   t->recent_cpu=new_recent_cpu;
 }
