@@ -92,6 +92,9 @@ bool comparator (struct list_elem *a, struct list_elem *b, void *aux UNUSED)
 {
   struct thread *threadOne = list_entry(a, struct thread, elem);
   struct thread *threadTwo = list_entry(b, struct thread, elem);
+  if (threadOne->wakeup==threadTwo->wakeup){
+    return threadOne->priority > threadTwo->priority;
+  }
   return threadOne->wakeup < threadTwo->wakeup;
 }
 
