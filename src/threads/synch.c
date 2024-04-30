@@ -51,6 +51,8 @@ sema_init (struct semaphore *sema, unsigned value)
   sema->value = value;
   list_init (&sema->waiters);
 }
+bool compare_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 /* Down or "P" operation on a semaphore.  Waits for SEMA's value
    to become positive and then atomically decrements it.
@@ -119,7 +121,10 @@ sema_up (struct semaphore *sema)
   if (!list_empty (&sema->waiters)) {
 
     max_thread = list_entry (list_max (&sema->waiters, compare_priority, NULL), struct thread, elem);
-	  list_remove (&max_thread->elem);
+
+	  
+    list_remove(&max_thread->elem);
+    
 	  thread_unblock (max_thread);
   }
    /*  thread_unblock (list_entry (list_pop_front (&sema->waiters),
@@ -255,12 +260,12 @@ lock_acquire (struct lock *lock)
     intr_set_level(old_level);
 
     sema_down (&lock->semaphore);
-    enum intr_level old_level = intr_disable();
+    enum intr_level old_level2 = intr_disable();
     thread_current()->locked_by = NULL;
 
     list_push_back(&thread_current()->locks_aquired, &lock->elem); //add lock to the list of locks held by the thread
     lock->holder = thread_current(); //update the lock holder
-    intr_set_level(old_level);
+    intr_set_level(old_level2);
 
     if(!thread_mlfqs){
       lock_update_priority(lock); //possibly add disable interrupts

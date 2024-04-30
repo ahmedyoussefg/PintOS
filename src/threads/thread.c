@@ -71,6 +71,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool compare_locks(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -218,13 +219,11 @@ printf("initialized thread: %s",t->name);
       printf("current thread: %s\n", thread_current()->name);
     }*/
 
-    yileding_if_necessary();
-    
- 
+    yeild_if_necessary();
     return tid;
 }
 void
-yileding_if_necessary(void){
+yeild_if_necessary(void){
   enum intr_level old_level;
   if(!list_empty(&ready_list)){
     struct thread *cur = thread_current();
@@ -381,7 +380,7 @@ thread_set_priority (int new_priority)
     thread_current ()->priority = new_priority;
     printf("thread %s changes its priority to   %d\n", thread_current()->name, thread_current()->priority);
     intr_set_level(old_level);
-    yileding_if_necessary();
+    yeild_if_necessary();
   //thread_current ()->priority = new_priority;
 }
 
