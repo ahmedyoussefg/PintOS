@@ -396,8 +396,6 @@ thread_get_recent_cpu (void)
 /* Function updates load average, called every second*/
 void
 thread_update_load_avg(void) {
-    printf("\nLOAD_AVG_BEFORE: %d\n", load_avg.value);
-
   int ready_threads_number=list_size(&ready_list);
   if (thread_current()!=idle_thread){
     ready_threads_number++;
@@ -407,8 +405,6 @@ thread_update_load_avg(void) {
   struct real left =multiply_real_by_real(fraction_59_60,load_avg);
   struct real right = multiply_real_by_int(fraction_1_60,ready_threads_number);
   load_avg=add_real_to_real(left, right);
-    printf("\nLOAD_AVG_AFTER: %d\n", load_avg.value);
-
 }
 
 void thread_update_recent_cpu(struct thread *t){
