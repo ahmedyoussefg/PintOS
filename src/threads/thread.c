@@ -528,6 +528,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->nice=0;
   t->recent_cpu.value=0;;
+  t->priority=priority;
   t->magic = THREAD_MAGIC;
   if (thread_mlfqs){
     if(t==initial_thread){

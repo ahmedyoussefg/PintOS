@@ -93,7 +93,7 @@ bool comparator (struct list_elem *a, struct list_elem *b, void *aux UNUSED)
   struct thread *threadOne = list_entry(a, struct thread, elem);
   struct thread *threadTwo = list_entry(b, struct thread, elem);
   if (threadOne->wakeup==threadTwo->wakeup){
-    return threadOne->priority > threadTwo->priority;
+    return threadOne->priority >= threadTwo->priority;
   }
   return threadOne->wakeup < threadTwo->wakeup;
 }
@@ -241,6 +241,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   {
     return;
   }
+          enum intr_level old_level=intr_disable();
 
   struct list_elem *head = list_begin(&blocked);
   struct thread *headThread = list_entry(head, struct thread, elem);
@@ -251,11 +252,13 @@ timer_interrupt (struct intr_frame *args UNUSED)
     thread_unblock(headThread);
     if (list_empty(&blocked))
     {
+      intr_set_level(old_level);
       return;
     }
     head = list_begin(&blocked);
     headThread = list_entry(head, struct thread, elem);
   }
+  intr_set_level(old_level);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
