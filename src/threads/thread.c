@@ -70,6 +70,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -167,7 +168,7 @@ thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
 {
   printf("thread_create\n");
-  printf("current thread: %d\n", thread_current()->name);
+  printf("current thread: %s\n", thread_current()->name);
   struct thread *t;
   struct kernel_thread_frame *kf;
   struct switch_entry_frame *ef;
@@ -183,6 +184,7 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+  t->original_priority=priority;
   tid = t->tid = allocate_tid ();
     printf("new thread: %s\n", name);
   /* Stack frame for kernel_thread(). */
@@ -205,22 +207,41 @@ printf("initialized thread: %s",t->name);
   /* Add to run queue. */
   // preemption
   printf("current thread priority: %d\n", thread_current()->priority);
+  thread_unblock (t);
   printf("new thread priority: %d\n", t->priority);
-    if (thread_current()->priority < t->priority)
+    /*if (thread_current()->priority < t->priority)
     {
       printf("thread_create: preemption\n");
-      list_push_front (&ready_list, &t->elem);
+      printf("current running thread: %s\n", running_thread()->name);
       thread_yield();
       printf("thread_create: preemption done\n");
-      printf("current thread: %d\n", thread_current()->name);
+      printf("current thread: %s\n", thread_current()->name);
+    }*/
+
+    yileding_if_necessary();
+    
+ 
+    return tid;
+}
+void
+yileding_if_necessary(void){
+  enum intr_level old_level;
+  if(!list_empty(&ready_list)){
+    struct thread *cur = thread_current();
+    struct thread *next = list_entry(list_max(&ready_list, compare_priority, NULL), struct thread, elem);
+    if(cur->priority < next->priority){
+           thread_yield();
+           intr_set_level(old_level);
 
     }
-    else
-    {
-      list_push_back (&ready_list, &t->elem);
   }
- 
-  return tid;
+  
+}
+bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  struct thread *thread_a = list_entry(a, struct thread, elem);
+  struct thread *thread_b = list_entry(b, struct thread, elem);
+  return thread_a->priority > thread_b->priority;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -256,7 +277,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, (list_less_func *) &compare_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -326,8 +347,10 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
+  
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, (list_less_func *) &compare_priority, NULL);
+    
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -353,21 +376,13 @@ thread_foreach (thread_action_func *func, void *aux)
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
-{
-  /*
-  Invoked to do priority donation to change the priority of the current running thread.
-  When priority donation is done?
-  When a thread of a higher priority than the current running thread 
-  is blocked by the same lock of the thread which is running and already
-  acquires this lock,so the highest thread priority
-  donates its priority to the holder of the lock.
- */
-  thread_current ()->priority = new_priority;/*Donation*/
-  struct lock *acquired_lock=&(thread_current()->locked_by);
-  /*When the current thread acquired lock is released, then pre-empt it
-  and recall its original priority*/
-  while(acquired_lock->holder != NULL);/*Waiting for the lock to be released*/
-  thread_yield();
+{ 
+     enum intr_level old_level = intr_disable();
+    thread_current ()->priority = new_priority;
+    printf("thread %s changes its priority to   %d\n", thread_current()->name, thread_current()->priority);
+    intr_set_level(old_level);
+    yileding_if_necessary();
+  //thread_current ()->priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
