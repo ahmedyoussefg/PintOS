@@ -360,10 +360,16 @@ thread_set_nice (int nice UNUSED)
   struct thread * current =thread_current();
   current->nice=nice;
   thread_update_priority(current);
+          enum intr_level old_level=intr_disable();
+  list_sort(&ready_list,&thread_compare_priority,NULL);
   struct thread * other_thread=list_entry(list_begin(&ready_list), struct thread, elem);
   if (other_thread->priority>current->priority && current->status == THREAD_RUNNING){
-    thread_yield();
+              intr_set_level(old_level);
+    if(!intr_context())
+      thread_yield();
   }
+          intr_set_level(old_level);
+
 }
 
 /* Returns the current thread's nice value. */
@@ -393,6 +399,9 @@ thread_update_load_avg(void) {
     printf("\nLOAD_AVG_BEFORE: %d\n", load_avg.value);
 
   int ready_threads_number=list_size(&ready_list);
+  if (thread_current()!=idle_thread){
+    ready_threads_number++;
+  }
   struct real fraction_59_60= divide_real_by_int(convert_int_to_real(59),60);
   struct real fraction_1_60= divide_real_by_int(convert_int_to_real(1),60);
   struct real left =multiply_real_by_real(fraction_59_60,load_avg);
@@ -425,6 +434,14 @@ void thread_update_all_priorities(void) {
         // printf("UPDATEDDDDD ALL PRIORITIES 1111111111111111\n");
 
   thread_foreach(&thread_update_priority, NULL);
+
+  list_sort(&ready_list,&thread_compare_priority,NULL);
+  struct thread * other_thread=list_entry(list_begin(&ready_list), struct thread, elem);
+  if (other_thread->priority>thread_current()->priority){
+    if (!intr_context())
+      thread_yield();
+  }
+
       // printf("UPDATEDDDDD ALL PRIORITIES 22222222222\n");
 
 }
@@ -526,6 +543,9 @@ init_thread (struct thread *t, const char *name, int priority)
       t->nice=thread_get_nice();
       t->recent_cpu.value=thread_get_recent_cpu();
       thread_update_priority(t);
+      enum intr_level old_level = intr_disable();
+      list_sort(&ready_list,&thread_compare_priority,NULL);
+      intr_set_level(old_level);
     }
   }
   old_level = intr_disable ();

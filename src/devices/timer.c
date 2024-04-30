@@ -199,15 +199,18 @@ timer_interrupt (struct intr_frame *args UNUSED)
   if (thread_mlfqs){
     // enum intr_level old_level=intr_disable();
     // printf("INSIDE THREADMLFQS\n");
+          enum intr_level old_level=intr_disable();
     increment_recent_cpu(thread_current());
+          intr_set_level(old_level);
+
     if ( timer_ticks () %4==0){
       // loop over all threads and update the priority
       // printf("UPDATE PRIORITIES\n");
-      // enum intr_level old_level=intr_disable();
+      enum intr_level old_level=intr_disable();
       // printf("AHAHAHA");
       thread_update_all_priorities();
       // printf("UPDATEDDDDD ALL PRIORITIES\n");
-      // intr_set_level(old_level);
+      intr_set_level(old_level);
       // intr_enable();
       // printf("OUTSIDE UPDATE PRIORITIES\n");
 
@@ -216,7 +219,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
       // update load_avg
             // printf("INSIDE UPDATE LOADAVG\n");
       // intr_disable();
-      // enum intr_level old_level=intr_disable();
+      enum intr_level old_level=intr_disable();
       thread_update_load_avg();
             // printf("OUTSIDE UPDATE LOADAVG\n");
 
@@ -225,7 +228,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
       thread_update_all_recent_cpus();
             // printf("OUTSIDE UPDATE CPUS\n");
-          // intr_set_level(old_level);
+          intr_set_level(old_level);
 
       // intr_enable();
     }
