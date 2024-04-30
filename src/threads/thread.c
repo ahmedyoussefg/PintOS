@@ -632,9 +632,12 @@ void
 remove_insert(struct thread *list)
 {
   enum intr_level old_level = intr_disable();
-
+  if(&ready_list!=NULL)
+  {
+   
   list_remove(&list->elem);
   list_insert_ordered(&ready_list, &list->elem, (list_less_func *) &compare_priority, NULL);
+  }
 
   intr_set_level(old_level);
 }
