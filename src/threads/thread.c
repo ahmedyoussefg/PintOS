@@ -384,18 +384,23 @@ thread_get_recent_cpu (void)
 /* Function updates load average, called every second*/
 void
 thread_update_load_avg(void) {
+    printf("\nLOAD_AVG_BEFORE: %d\n", load_avg.value);
+
   int ready_threads_number=list_size(&ready_list);
   struct real fraction_59_60= divide_real_by_int(convert_int_to_real(59),60);
   struct real fraction_1_60= divide_real_by_int(convert_int_to_real(1),60);
   struct real left =multiply_real_by_real(fraction_59_60,load_avg);
-  struct real right = multiply_real_by_int(fraction_59_60,ready_threads_number);
+  struct real right = multiply_real_by_int(fraction_1_60,ready_threads_number);
   load_avg=add_real_to_real(left, right);
+    printf("\nLOAD_AVG_AFTER: %d\n", load_avg.value);
+
 }
 
 void thread_update_recent_cpu(struct thread *t){
   struct real up = multiply_real_by_int (load_avg,2);
   struct real down = add_real_to_int(up,1);
-  struct real left = multiply_real_by_real(divide_real_by_real(up,down),t->recent_cpu);
+  struct real in =divide_real_by_real(up,down);
+  struct real left = multiply_real_by_real(in,t->recent_cpu);
   t->recent_cpu =add_real_to_int(left , t->nice);
 }
 void
@@ -535,13 +540,6 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else{
-    if (thread_mlfqs){ // mlfqs
-      // get highest priority from all ready threads
-      struct list_elem *max_elem = list_max(&ready_list, &thread_compare_priority, NULL);
-      
-      return list_entry(max_elem, struct thread, elem);
-    }
-    else // priority scheduler 
       return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }

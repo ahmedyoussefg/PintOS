@@ -200,10 +200,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
     // enum intr_level old_level=intr_disable();
     // printf("INSIDE THREADMLFQS\n");
     struct thread * curr=thread_current();
-    if (strcmp(curr->name,"idle")!=0 && curr->status == THREAD_RUNNING){
       struct real new_recent_cpu =add_real_to_int(curr->recent_cpu,1);
       curr->recent_cpu=new_recent_cpu;
-    }
     if (ticks%4==0){
       // loop over all threads and update the priority
       // printf("UPDATE PRIORITIES\n");
@@ -216,7 +214,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
       // printf("OUTSIDE UPDATE PRIORITIES\n");
 
     }
-    if (ticks%TIMER_FREQ==0){
+    if (ticks%TIMER_FREQ==3){
       // update load_avg
             // printf("INSIDE UPDATE LOADAVG\n");
       // intr_disable();

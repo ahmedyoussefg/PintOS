@@ -50,7 +50,7 @@ static struct real sub_real_from_real( struct real x, struct real y){
 }
 static struct real add_real_to_int(struct real x, int n){
     struct real result;
-    result.value=x.value + n * F_FIXED_POINT;
+    result.value=x.value + n * F_FIXED_POINT; // 0 + 1*(2^14)
     return result;
 }
 
