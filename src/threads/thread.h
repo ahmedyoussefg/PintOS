@@ -89,9 +89,16 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /*Modifiable priority. */
     int original_priority;                      /*Original Priority. */   
+    bool donated;                       /*If priority has been donated. */
     struct list_elem allelem;           /* List element for all threads list. */
     struct lock* locked_by;              /* Lock that the thread is waiting on. */
     struct list thread_locks;
+<<<<<<< HEAD
+=======
+    struct list donating_threads;         /*Threads which donated this thread*/ 
+    struct  list_elem donating_elem;      /*List element for donating threads list*/
+    
+>>>>>>> 3d46c33 (priority chanege and preempt handled)
     
 
     /* Shared between thread.c and synch.c. */
@@ -141,5 +148,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+
 
 #endif /* threads/thread.h */
