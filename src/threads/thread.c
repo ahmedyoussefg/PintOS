@@ -341,6 +341,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  if (thread_mlfqs)return;
   thread_current ()->priority = new_priority;
 }
 
@@ -358,6 +359,12 @@ thread_set_nice (int nice UNUSED)
   /* Not yet implemented. */
   struct thread * current =thread_current();
   current->nice=nice;
+  thread_update_priority(current);
+  struct list_elem *max_elem = list_max(&ready_list, &thread_compare_priority,NULL);
+  struct thread * other_thread=list_entry(max_elem, struct thread, elem);
+  if (other_thread->priority>=current->priority){
+    thread_yield();
+  }
 }
 
 /* Returns the current thread's nice value. */
@@ -507,10 +514,21 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
   t->nice=0;
+  t->recent_cpu.value=0;;
   t->magic = THREAD_MAGIC;
-
+  if (thread_mlfqs){
+    if(t==initial_thread){
+      t->nice=0;
+      t->recent_cpu.value=0;
+      t->priority=PRI_MAX;
+    }
+    else {
+      t->nice=thread_get_nice();
+      t->recent_cpu.value=thread_get_recent_cpu();
+      thread_update_priority(t);
+    }
+  }
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -528,7 +546,11 @@ alloc_frame (struct thread *t, size_t size)
   t->stack -= size;
   return t->stack;
 }
-
+void increment_recent_cpu(struct thread * t){
+  if (t==initial_thread)return;
+  struct real new_recent_cpu =add_real_to_int(t->recent_cpu,1);
+  t->recent_cpu=new_recent_cpu;
+}
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
@@ -539,9 +561,8 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else{
+  else
       return list_entry (list_pop_front (&ready_list), struct thread, elem);
-  }
 }
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
