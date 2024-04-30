@@ -630,14 +630,68 @@ allocate_tid (void)
 }
 
 void
-remove_insert(struct list *list, struct list_elem *elem)
+remove_insert(struct thread *list)
 {
+  enum intr_level old_level = intr_disable();
 
-  
-  list_remove(elem);
-  list_insert_ordered(list, elem, (list_less_func *) &compare_priority, NULL);
+  list_remove(&list->elem);
+  list_insert_ordered(&ready_list, &list->elem, (list_less_func *) &compare_priority, NULL);
+
+  intr_set_level(old_level);
 }
 
+
+/*
+    Function to update the priority of the thread
+    The function is called when the priority of the thread is updated
+    or when the thread acquires a lock
+    The function updates the priority of the thread based on the priority of the locks held by the thread
+    The function is called with interrupts disabled
+*/
+void
+thread_update_priority(struct thread *t)
+{
+    enum intr_level old_level = intr_disable();
+    
+    int original_priority = t->original_priority; //effective priority of the thread
+
+    if(list_empty(&t->locks_aquired))
+    {
+        t->priority = original_priority;
+    }
+    else
+    {
+        int lock_priority = list_entry(list_max(&t->locks_aquired, compare_locks, NULL), struct lock, elem)->max_priority;  //max priority of the locks held by the thread
+        
+        //updating the priority of the thread if the original priority is less than the lock priority assigne the lock priority to the thread
+        if(original_priority>lock_priority)
+        {
+            t->priority = original_priority;
+        }
+        else
+        {
+            t->priority = lock_priority;
+        }
+    }
+
+    intr_set_level(old_level);
+
+} 
+
+/*
+    Function to compare the priorities of the locks
+    The function is used to sort the locks based on the priority of the locks
+    The function is called with interrupts disabled
+
+*/
+bool
+compare_locks(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+    struct lock *lock_a = list_entry(a, struct lock, elem);
+    struct lock *lock_b = list_entry(b, struct lock, elem);
+
+    return lock_a->max_priority > lock_b->max_priority;
+}
 
 
 /* Offset of `stack' member within `struct thread'.
