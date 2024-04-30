@@ -30,7 +30,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "threads/interrupt.h"
-#include "threads/thread.h"
+#include "threads/thread.h" 
+
+
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -109,15 +111,22 @@ void
 sema_up (struct semaphore *sema) 
 {
   enum intr_level old_level;
+  struct thread *max_thread;
 
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
-  sema->value++;
+  if (!list_empty (&sema->waiters)) {
+
+    max_thread = list_entry (list_max (&sema->waiters, compare_priority, NULL), struct thread, elem);
+	  list_remove (&max_thread->elem);
+	  thread_unblock (max_thread);
+  }
+   /*  thread_unblock (list_entry (list_pop_front (&sema->waiters),
+                                struct thread, elem));*/
+  sema->value++; 
   intr_set_level (old_level);
+  yeild_if_necessary();
 }
 
 static void sema_test_helper (void *sema_);
@@ -196,8 +205,39 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  if(!lock_try_acquire(lock) && lock->holder != NULL){
+
+    struct lock *t_lock = lock;
+
+    struct thread *curr_holder = lock->holder;
+    int curr_priority = thread_current()->priority;
+
+    while( t_lock-> max_priority < curr_priority){
+      
+      t_lock->max_priority = curr_priority;
+      curr_holder->priority = curr_priority;
+
+
+if (curr_holder->status == THREAD_READY){
+  remove_insert( &curr_holder, t_lock);
+}
+ 
+     
+     t_lock = t_lock->holder->locked_by;   
+
+        if(lock->holder->locked_by != NULL){
+          lock = lock->holder->locked_by;
+        }
+        else{
+          break;
+      }
+
+  
+    
+  }
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+}
 }
 
 /* Tries to acquires LOCK and returns true if successful or false

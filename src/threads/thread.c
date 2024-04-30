@@ -184,7 +184,7 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
-  t->original_priority=priority;
+  t->priority=priority;
   tid = t->tid = allocate_tid ();
     printf("new thread: %s\n", name);
   /* Stack frame for kernel_thread(). */
@@ -628,6 +628,17 @@ allocate_tid (void)
 
   return tid;
 }
+
+void
+remove_insert(struct list *list, struct list_elem *elem)
+{
+
+  
+  list_remove(elem);
+  list_insert_ordered(list, elem, (list_less_func *) &compare_priority, NULL);
+}
+
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
