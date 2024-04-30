@@ -195,10 +195,22 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-  
+
+  //condition lock->acquired && priority>running==>donate
+  if(lock->holder!=NULL && lock->holder->priority < thread_current()->priority){
+    priority_donation(&lock);
+  }
+
   sema_down (&lock->semaphore);
-  thread_current()->locked_by = lock;
   lock->holder = thread_current ();
+}
+
+void priority_donation(struct lock *l){
+ 
+  l->holder->priority=thread_current()->priority;/*Donation*/
+  while(l->holder != NULL);/*Waiting for the lock to be released and the running*/ 
+                               /*thread is preempted with its original priority and enters the read queue again*/
+
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -235,6 +247,7 @@ lock_release (struct lock *lock)
   thread_current()->priority=thread_current()->original_priority;
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+  thread_yield();
 }
 
 /* Returns true if the current thread holds LOCK, false
