@@ -195,15 +195,17 @@ thread_create (const char *name, int priority,
   kf->aux = aux;
 
 
-printf("initialized thread: %s",t->name);
+
   /* Stack frame for switch_entry(). */
   ef = alloc_frame (t, sizeof *ef);
   ef->eip = (void (*) (void)) kernel_thread;
+
 
   /* Stack frame for switch_threads(). */
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+    printf("initialized thread: %s\n",t->name);
 
   /* Add to run queue. */
   // preemption
@@ -220,6 +222,7 @@ printf("initialized thread: %s",t->name);
     }*/
 
     yeild_if_necessary();
+    printf("thread_create: done\n");
     return tid;
 }
 void
@@ -229,6 +232,8 @@ yeild_if_necessary(void){
     struct thread *cur = thread_current();
     struct thread *next = list_entry(list_max(&ready_list, compare_priority, NULL), struct thread, elem);
     if(cur->priority < next->priority){
+      printf("current thread: %s\n", cur->name);
+      printf("thread_yield\n");
            thread_yield();
            intr_set_level(old_level);
 
@@ -495,7 +500,7 @@ is_thread (struct thread *t)
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
-init_thread (struct thread *t, const char *name, int priority)
+  init_thread (struct thread *t, const char *name, int priority)
 {
   enum intr_level old_level;
 
@@ -508,7 +513,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->magic = THREAD_MAGIC;
+  t->magic = THREAD_MAGIC;  
+  t->original_priority= priority;
+  t->locked_by = NULL;
+  list_init(&t->locks_aquired);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
