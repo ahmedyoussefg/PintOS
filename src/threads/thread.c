@@ -20,7 +20,8 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
-/* List of processes in THREAD_READY state, that is, processes
+/* List of processes in THREAD_READY 
+state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
 
@@ -72,7 +73,6 @@ void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 bool compare_locks(const struct list_elem *a, const struct list_elem *b, void *aux);
-
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -227,25 +227,24 @@ thread_create (const char *name, int priority,
 }
 void
 yeild_if_necessary(void){
-  enum intr_level old_level;
-  if(!list_empty(&ready_list)){
-    struct thread *cur = thread_current();
-    struct thread *next = list_entry(list_max(&ready_list, compare_priority, NULL), struct thread, elem);
-    if(cur->priority < next->priority){
-      printf("current thread: %s\n", cur->name);
-      printf("thread_yield\n");
-           thread_yield();
-           intr_set_level(old_level);
 
+  enum intr_level old_level=intr_disable();
+    bool condition = !list_empty(&ready_list) && list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority;
+
+    intr_set_level(old_level);
+    if(condition)
+    {
+      thread_yield();
     }
-  }
-  
+
+    
+
 }
 bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux)
 {
   struct thread *thread_a = list_entry(a, struct thread, elem);
   struct thread *thread_b = list_entry(b, struct thread, elem);
-  return thread_a->priority > thread_b->priority;
+  return thread_a->priority <= thread_b->priority;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -382,8 +381,9 @@ void
 thread_set_priority (int new_priority) 
 { 
      enum intr_level old_level = intr_disable();
-    thread_current ()->priority = new_priority;
+    thread_current ()->original_priority = new_priority;
     printf("thread %s changes its priority to   %d\n", thread_current()->name, thread_current()->priority);
+    thread_update_priority(thread_current());
     intr_set_level(old_level);
     yeild_if_necessary();
   //thread_current ()->priority = new_priority;
@@ -550,7 +550,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    return list_entry (list_pop_back (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -640,12 +640,10 @@ void
 remove_insert(struct thread *list)
 {
   enum intr_level old_level = intr_disable();
-  if(&ready_list!=NULL)
-  {
+ 
    
   list_remove(&list->elem);
   list_insert_ordered(&ready_list, &list->elem, (list_less_func *) &compare_priority, NULL);
-  }
 
   intr_set_level(old_level);
 }
@@ -694,14 +692,7 @@ thread_update_priority(struct thread *t)
     The function is called with interrupts disabled
 
 */
-bool
-compare_locks(const struct list_elem *a, const struct list_elem *b, void *aux)
-{
-    struct lock *lock_a = list_entry(a, struct lock, elem);
-    struct lock *lock_b = list_entry(b, struct lock, elem);
 
-    return lock_a->max_priority > lock_b->max_priority;
-}
 
 
 /* Offset of `stack' member within `struct thread'.
