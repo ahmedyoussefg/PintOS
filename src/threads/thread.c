@@ -207,7 +207,47 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+if (!thread_mlfqs){
+  yield_if_necessary(); 
+  }
+
   return tid;
+}
+
+
+void
+yield_if_necessary(void){
+
+  // enum intr_level old_level = intr_disable();
+  // if(!list_empty(&ready_list)){
+  //   struct thread *cur = thread_current();
+  //   struct thread *next = list_entry(list_max(&ready_list, compare_priority, NULL), struct thread, elem);
+  //   if(cur->priority < next->priority){
+  //     printf("current thread: %s\n", cur->name);
+  //     printf("thread_yield\n");
+  //          thread_yield();
+  //          intr_set_level(old_level);
+
+  // enum intr_level old_level=intr_disable();
+  //   bool condition = !list_empty(&ready_list) && list_entry(list_begin(&ready_list), struct thread, elem)->priority > thread_current()->priority;
+
+  //   intr_set_level(old_level);
+  //   if(condition)
+  //   {
+  //     thread_yield();
+  //   }
+  //   }
+
+ enum intr_level old_level = intr_disable ();
+  bool result = !list_empty (&ready_list) &&
+                list_entry (list_front (&ready_list), struct thread, elem)->priority >
+	            thread_get_priority ();
+  intr_set_level (old_level);
+  
+  if (result)
+	   thread_yield (); 
+
+
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
