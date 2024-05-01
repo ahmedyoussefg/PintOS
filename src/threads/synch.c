@@ -298,7 +298,7 @@ if (!thread_mlfqs){
    enum intr_level old_level = intr_disable ();
   list_remove (&lock->elem);
   intr_set_level (old_level);
-	thread_update_priority (lock->holder);
+	update_priority (lock->holder);
 }
 
   lock->holder = NULL;

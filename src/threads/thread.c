@@ -91,6 +91,16 @@ bool compare_locks(const struct list_elem *a, const struct list_elem *b, void *a
 
    It is not safe to call thread_current() until this function
    finishes. */
+bool
+compare_threads_by_priority (const struct list_elem *a,
+                             const struct list_elem *b,
+                             void *aux UNUSED)
+{
+  return list_entry (a, struct thread, elem)->priority <=
+         list_entry (b, struct thread, elem)->priority;
+}
+
+
 void
 thread_init (void) 
 {
@@ -383,12 +393,11 @@ thread_set_priority (int new_priority)
   if (thread_mlfqs)return;
 
    enum intr_level old_level = intr_disable();
-    thread_current ()->original_priority = new_priority;
+   // thread_current ()->original_priority = new_priority;
   
     update_priority(thread_current());
     intr_set_level(old_level);
     yield_if_necessary();
-    thread_current ()->priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
