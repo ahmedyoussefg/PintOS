@@ -253,7 +253,9 @@ lock_acquire (struct lock *lock)
   if (!thread_mlfqs)
     {
 	  lock_update_priority (lock);
-      update_priority (thread_current ());
+      //update_priority (thread_current ());
+      
+     update_priority_of_all_threads(); 
       thread_yield ();
 	}
 }

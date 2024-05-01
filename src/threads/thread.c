@@ -46,6 +46,8 @@ struct kernel_thread_frame
     void *aux;                  /* Auxiliary data for function. */
   };
 
+void update_priority_of_all_threads(void);
+
 bool thread_compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux){
   struct thread *thread_a = list_entry(a, struct thread, elem);
   struct thread *thread_b = list_entry(b, struct thread, elem);
