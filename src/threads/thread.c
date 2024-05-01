@@ -393,9 +393,9 @@ thread_set_priority (int new_priority)
   if (thread_mlfqs)return;
 
    enum intr_level old_level = intr_disable();
-   // thread_current ()->original_priority = new_priority;
-  
-    update_priority(thread_current());
+   thread_current ()->original_priority = new_priority;
+   thread_current ()->priority = new_priority;
+    update_priority_of_all_threads();
     intr_set_level(old_level);
     yield_if_necessary();
 }
@@ -770,9 +770,15 @@ update_priority(struct thread *t)
     }
 
     intr_set_level(old_level);
-
 } 
 
+void
+update_priority_of_all_threads(void)
+{
+    enum intr_level old_level = intr_disable();
+    thread_foreach(&update_priority, thread_current());
+    intr_set_level(old_level);
+}
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
