@@ -76,6 +76,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+bool compare_locks(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -246,8 +247,6 @@ yield_if_necessary(void){
   
   if (result)
 	   thread_yield (); 
-
-
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -382,7 +381,14 @@ void
 thread_set_priority (int new_priority) 
 {
   if (thread_mlfqs)return;
-  thread_current ()->priority = new_priority;
+
+   enum intr_level old_level = intr_disable();
+    thread_current ()->original_priority = new_priority;
+  
+    update_priority(thread_current());
+    intr_set_level(old_level);
+    yield_if_necessary();
+    thread_current ()->priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
@@ -569,6 +575,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->nice=0;
   t->recent_cpu.value=0;;
   t->priority=priority;
+  t->original_priority=priority;
+  list_init(&t->locks_aquired);
+  t->locked_by=NULL;
+  t->wakeup=0;
   t->magic = THREAD_MAGIC;
   if (thread_mlfqs){
     if(t==initial_thread){
@@ -703,6 +713,58 @@ allocate_tid (void)
   return tid;
 }
 
+bool
+compare_locks(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+    struct lock *lock_a = list_entry(a, struct lock, elem);
+    struct lock *lock_b = list_entry(b, struct lock, elem);
+
+    return lock_a->max_priority >= lock_b->max_priority;
+}
+void
+remove_insert(struct thread *list)
+{
+  enum intr_level old_level = intr_disable();
+ 
+
+  list_remove(&list->elem);
+  list_insert_ordered(&ready_list, &list->elem, thread_compare_priority, NULL);
+
+  intr_set_level(old_level);
+}
+
+
+void
+update_priority(struct thread *t)
+{
+    enum intr_level old_level = intr_disable();
+    
+    int original_priority = t->original_priority; //effective priority of the thread
+
+    if(list_empty(&t->locks_aquired))
+    {
+        t->priority = original_priority;
+    }
+    else
+    {
+        int lock_priority = list_entry(list_max(&t->locks_aquired, &compare_locks, NULL), struct lock, elem)->max_priority;  //max priority of the locks held by the thread
+        
+        //updating the priority of the thread if the original priority is less than the lock priority assigne the lock priority to the thread
+        if(original_priority>lock_priority)
+        {
+            t->priority = original_priority;
+        }
+        else
+        {
+            t->priority = lock_priority;
+        }
+    }
+
+    intr_set_level(old_level);
+
+} 
+
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

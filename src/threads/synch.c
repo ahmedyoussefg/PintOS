@@ -41,6 +41,8 @@
 
    - up or "V": increment the value (and wake up one waiting
      thread, if any). */
+
+     void lock_update_priority (struct lock *lock);
 void
 sema_init (struct semaphore *sema, unsigned value) 
 {
@@ -205,11 +207,11 @@ lock_acquire (struct lock *lock)
   
   if(!thread_mlfqs)
   {
+    enum intr_level old_level = intr_disable ();
 
   /* If the lock is not held by any other threads. */
   if (lock->holder != NULL)
     {
-	  enum intr_level old_level = intr_disable ();
 	  thread_current ()->locked_by = lock;
 	  /* Do priority donation when mlfqs is unset. */
 	 
@@ -222,7 +224,9 @@ lock_acquire (struct lock *lock)
 		    {
   
 		      temp_lock->max_priority = current_priority;
-		      thread_update_priority (temp_holder);
+          
+		      update_priority (temp_holder);
+
 		      if (temp_holder->status == THREAD_READY)
 		      remove_insert (temp_holder);
 
@@ -238,18 +242,18 @@ lock_acquire (struct lock *lock)
 	
 
   sema_down (&lock->semaphore);
-  enum intr_level old_level = intr_disable ();
+  enum intr_level level = intr_disable ();
   thread_current ()->locked_by = NULL;
   /* After SEMA DOWN, the current thread holds the lock. */
   list_push_front (&thread_current ()->locks_aquired, &lock->elem);
   lock->holder = thread_current ();
-  intr_set_level (old_level);
+  intr_set_level (level);
   
   /* If mlfqs is not set, the priority may be donated. */
   if (!thread_mlfqs)
     {
 	  lock_update_priority (lock);
-      thread_update_priority (thread_current ());
+      update_priority (thread_current ());
       thread_yield ();
 	}
 }
@@ -317,6 +321,7 @@ struct semaphore_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
+    int max_priority;                   /*Maximum priority of the thread waiting on the semaphore*/
   };
 
 /* Initializes condition variable COND.  A condition variable
@@ -405,4 +410,24 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+void
+lock_update_priority(struct lock *lock){
+  
+  int priority ;
+  if(list_empty(&(&lock->semaphore)->waiters)){
+    priority = 0;
+    
+  }
+  else{
+    //struct thread *max_thread = list_entry (list_max (&(&lock->semaphore)->waiters,
+    struct thread *max_thread = list_entry (list_front(&(&lock->semaphore)->waiters), struct thread, elem);
+    //if max thread _priority is greater than the max priority of the lock then update the priority of the lock
+    if(max_thread->priority > lock->max_priority){
+      priority = max_thread->priority;
+    }
+    else
+      return;
+  }
+  lock->max_priority = priority;//update the max priority of the lock
 }

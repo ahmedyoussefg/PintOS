@@ -87,6 +87,8 @@ main (void)
 
   /* Initialize ourselves as a thread so we can use locks,
      then enable console locking. */
+       printf("Thread init done\n");
+
   thread_init ();
   console_init ();  
 
@@ -120,7 +122,7 @@ main (void)
   serial_init_queue ();
   timer_calibrate ();
 
-#ifdef FILESYS
+#ifdef FILESYS  
   /* Initialize file system. */
   ide_init ();
   locate_block_devices ();
