@@ -117,6 +117,7 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)){
     struct thread * mx_waiter= list_entry (list_pop_front(&sema->waiters),struct thread, elem);
+    list_remove (&mx_waiter->elem);
     thread_unblock (mx_waiter);
     if (mx_waiter->priority>thread_current()->priority){
       sema->value++;
@@ -208,11 +209,12 @@ lock_acquire (struct lock *lock)
   if(!thread_mlfqs)
   {
     enum intr_level old_level = intr_disable ();
+    	  thread_current ()->locked_by = lock;
+
 
   /* If the lock is not held by any other threads. */
   if (lock->holder != NULL)
     {
-	  thread_current ()->locked_by = lock;
 	  /* Do priority donation when mlfqs is unset. */
 	 
 		  /* Cursively donate priorities. */
@@ -253,9 +255,7 @@ lock_acquire (struct lock *lock)
   if (!thread_mlfqs)
     {
 	  lock_update_priority (lock);
-      //update_priority (thread_current ());
-      
-     update_priority_of_all_threads(); 
+      update_priority (thread_current ());
       thread_yield ();
 	}
 }
@@ -422,7 +422,6 @@ lock_update_priority(struct lock *lock){
     
   }
   else{
-    //struct thread *max_thread = list_entry (list_max (&(&lock->semaphore)->waiters,
     struct thread *max_thread = list_entry (list_front(&(&lock->semaphore)->waiters), struct thread, elem);
     //if max thread _priority is greater than the max priority of the lock then update the priority of the lock
     if(max_thread->priority > lock->max_priority){
