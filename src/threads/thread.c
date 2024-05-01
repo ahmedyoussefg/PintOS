@@ -46,6 +46,8 @@ struct kernel_thread_frame
     void *aux;                  /* Auxiliary data for function. */
   };
 
+void update_priority_of_all_threads(void);
+
 bool thread_compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux){
   struct thread *thread_a = list_entry(a, struct thread, elem);
   struct thread *thread_b = list_entry(b, struct thread, elem);
@@ -582,11 +584,13 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->nice=0;
-  t->recent_cpu.value=0;;
+  t->recent_cpu.value=0;
+
   t->priority=priority;
   t->original_priority=priority;
   list_init(&t->locks_aquired);
   t->locked_by=NULL;
+  
   t->wakeup=0;
   t->magic = THREAD_MAGIC;
   if (thread_mlfqs){

@@ -117,6 +117,7 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)){
     struct thread * mx_waiter= list_entry (list_pop_front(&sema->waiters),struct thread, elem);
+    list_remove (&mx_waiter->elem);
     thread_unblock (mx_waiter);
     if (mx_waiter->priority>thread_current()->priority){
       sema->value++;
@@ -494,7 +495,6 @@ lock_update_priority(struct lock *lock){
     
   }
   else{
-    //struct thread *max_thread = list_entry (list_max (&(&lock->semaphore)->waiters,
     struct thread *max_thread = list_entry (list_front(&(&lock->semaphore)->waiters), struct thread, elem);
     //if max thread _priority is greater than the max priority of the lock then update the priority of the lock
     if(max_thread->priority > lock->max_priority){
