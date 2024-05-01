@@ -728,7 +728,7 @@ compare_locks(const struct list_elem *a, const struct list_elem *b, void *aux)
     struct lock *lock_a = list_entry(a, struct lock, elem);
     struct lock *lock_b = list_entry(b, struct lock, elem);
 
-    return lock_a->max_priority >= lock_b->max_priority;
+    return lock_a->max_priority <= lock_b->max_priority;
 }
 void
 remove_insert(struct thread *list)

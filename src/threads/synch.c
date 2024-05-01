@@ -198,71 +198,137 @@ lock_init (struct lock *lock)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
-void
-lock_acquire (struct lock *lock)
+// void
+// lock_acquire (struct lock *lock)
+// { 
+  
+//   ASSERT (lock != NULL);
+//   ASSERT (!intr_context ());
+//   ASSERT (!lock_held_by_current_thread (lock));
+  
+//   if(!thread_mlfqs)
+//   {
+//      enum intr_level old_level = intr_disable();
+
+//         // Only execute donation if the lock is currently held by another thread.
+//         if (lock->holder != NULL)
+//         {
+//             thread_current()->locked_by = lock;
+//             int current_priority = thread_get_priority();
+//             struct thread *temp_holder = lock->holder;
+
+//             // Only donate if current thread's priority is higher than the lock's maximum priority.
+//             if (lock->max_priority < current_priority)
+//             {
+//                 // Traverse up the chain of locks only if necessary.
+//                 while (temp_holder != NULL && temp_holder->priority < current_priority)
+//                 {
+//                     temp_holder->priority = current_priority; // Directly update the holder's priority.
+
+//                     if (temp_holder->status == THREAD_READY)
+//                     {
+//                         remove_insert(temp_holder);  // Adjust the ready queue only if necessary.
+//                     }
+
+//                     struct lock *temp_lock = temp_holder->locked_by;
+//                     if (temp_lock == NULL || temp_lock->max_priority >= current_priority)
+//                     {
+//                         break; // Stop if no further donation is necessary.
+//                     }
+
+//                     temp_holder = temp_lock->holder;
+//                     temp_lock->max_priority = current_priority;  // Update the lock's priority.
+//                 }
+//             }
+//         }
+
+//         intr_set_level(old_level);
+//     }
+
+//     sema_down(&lock->semaphore);
+
+//     enum intr_level level = intr_disable();
+//     thread_current()->locked_by = NULL;
+//     lock->holder = thread_current();
+//     list_push_front(&thread_current()->locks_aquired, &lock->elem);
+//     intr_set_level(level);
+
+//     if (!thread_mlfqs)
+//     {
+//         lock_update_priority(lock);
+//         update_priority(thread_current());
+//         thread_yield();
+//     }
+
+// else{
+//   sema_down (&lock->semaphore);
+//   lock->holder = thread_current ();
+// }
+
+// }
+void lock_acquire(struct lock *lock)
 {
-  ASSERT (lock != NULL);
-  ASSERT (!intr_context ());
-  ASSERT (!lock_held_by_current_thread (lock));
-  
-  if(!thread_mlfqs)
-  {
-    enum intr_level old_level = intr_disable ();
+    ASSERT(lock != NULL);
+    ASSERT(!intr_context());
+    ASSERT(!lock_held_by_current_thread(lock));
 
-  /* If the lock is not held by any other threads. */
-  if (lock->holder != NULL)
+    if (!thread_mlfqs)
     {
-	  thread_current ()->locked_by = lock;
-	  /* Do priority donation when mlfqs is unset. */
-	 
-		  /* Cursively donate priorities. */
-		  int current_priority = thread_get_priority ();
-	      struct lock *temp_lock = lock;
-	      struct thread *temp_holder = lock->holder;
+        enum intr_level old_level = intr_disable();
 
-	      while (temp_lock->max_priority < current_priority)
-		    {
-  
-		      temp_lock->max_priority = current_priority;
-          
-		      update_priority (temp_holder);
+        // Only try to donate priority if the lock is currently held by another thread.
+        if (lock->holder != NULL)
+        {
+            thread_current()->locked_by = lock; // Mark the lock that the current thread is waiting on.
+            int current_priority = thread_get_priority();
 
-		      if (temp_holder->status == THREAD_READY)
-		      remove_insert (temp_holder);
+            // Donate priority recursively if necessary.
+            for (struct lock *temp_lock = lock; temp_lock != NULL; temp_lock = temp_lock->holder->locked_by)
+            {
+                if (temp_lock->max_priority >= current_priority)
+                {
+                    break; // Break the loop if no further donation is needed.
+                }
 
-              temp_lock = temp_holder->locked_by;
-		      if (temp_lock == NULL)
-			    break;
-		      else
-		        temp_holder = temp_lock->holder;
-		      ASSERT (temp_holder);
-		    }
-		}
-	  intr_set_level (old_level);
-	
+                temp_lock->max_priority = current_priority;
 
-  sema_down (&lock->semaphore);
-  enum intr_level level = intr_disable ();
-  thread_current ()->locked_by = NULL;
-  /* After SEMA DOWN, the current thread holds the lock. */
-  list_push_front (&thread_current ()->locks_aquired, &lock->elem);
-  lock->holder = thread_current ();
-  intr_set_level (level);
-  
-  /* If mlfqs is not set, the priority may be donated. */
-  if (!thread_mlfqs)
+                struct thread *temp_holder = temp_lock->holder;
+                update_priority(temp_holder);
+
+                if (temp_holder->status == THREAD_READY)
+                {
+                    remove_insert(temp_holder); // Reinsert the thread into the ready list in the correct position.
+                }
+            }
+        }
+
+        intr_set_level(old_level);
+        sema_down(&lock->semaphore);
+
+    enum intr_level level = intr_disable();
+    thread_current()->locked_by = NULL;
+    list_push_front(&thread_current()->locks_aquired, &lock->elem);
+    lock->holder = thread_current();
+    intr_set_level(level);
+
+    }
+
+    // Acquire the semaphore associated with the lock.
+    
+    // Update priorities if necessary.
+    if (!thread_mlfqs)
     {
-	  lock_update_priority (lock);
-      update_priority (thread_current ());
-      thread_yield ();
-	}
+        lock_update_priority(lock);
+        update_priority(thread_current());
+        thread_yield(); // Yield to ensure that the highest priority thread runs next.
+    }
+else
+{
+    sema_down(&lock->semaphore);
+    lock->holder = thread_current();
 }
-else{
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
 }
 
-}
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
    thread.
@@ -282,6 +348,12 @@ lock_try_acquire (struct lock *lock)
     lock->holder = thread_current ();
   return success;
 }
+
+
+
+
+
+
 
 /* Releases LOCK, which must be owned by the current thread.
 
@@ -304,6 +376,8 @@ if (!thread_mlfqs){
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }
+
+
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
