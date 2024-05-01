@@ -74,7 +74,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-	  list_push_front (&sema->waiters, &thread_current ()->elem);
+	  list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
   sema->value--;
@@ -343,6 +343,7 @@ lock_acquire (struct lock *lock)
 
 	      while (temp_lock->max_priority < current_priority)
 		    {
+  
 		      temp_lock->max_priority = current_priority;
 		      thread_update_priority (temp_holder);
 		      if (temp_holder->status == THREAD_READY)
@@ -364,7 +365,7 @@ lock_acquire (struct lock *lock)
   enum intr_level old_level = intr_disable ();
   thread_current ()->locked_by = NULL;
   /* After SEMA DOWN, the current thread holds the lock. */
-  list_push_back (&thread_current ()->locks_aquired, &lock->elem);
+  list_push_front (&thread_current ()->locks_aquired, &lock->elem);
   lock->holder = thread_current ();
   intr_set_level (old_level);
   
@@ -493,7 +494,7 @@ cond_wait (struct condition *cond, struct lock *lock)
 */
 bool 
 compare_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)	{						
-  return list_entry (a, struct semaphore_elem, elem)->max_priority <=
+  return list_entry (a, struct semaphore_elem, elem)->max_priority >=
          list_entry (b, struct semaphore_elem, elem)->max_priority;
 }
 /* If any threads are waiting on COND (protected by LOCK), then
@@ -512,7 +513,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_back (&cond->waiters),
+    sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
 }
 
@@ -537,5 +538,5 @@ compare_locks(const struct list_elem *a, const struct list_elem *b, void *aux)
     struct lock *lock_a = list_entry(a, struct lock, elem);
     struct lock *lock_b = list_entry(b, struct lock, elem);
 
-    return lock_a->max_priority <= lock_b->max_priority;
+    return lock_a->max_priority >= lock_b->max_priority;
 }
