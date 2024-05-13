@@ -19,13 +19,23 @@ syscall_handler (struct intr_frame *f)
   int sys_call_type = (int)f->esp;
   if (sys_call_type == SYS_WAIT){
     // handle wait
+    syscall_wait();
   }
   else if (sys_call_type == SYS_EXIT) {
     // handle exit
-  }
-  else if (sys_call_type == SYS_EXEC){
-    // handle exec
+    syscall_exit();
   }
   //  TODO: ....continue if elses........ for remaining  syscalls
   thread_exit ();
+}
+
+// OUR syscalls implementation:
+int
+syscall_wait(pid_t pid) {
+
+}
+
+void
+syscall_exit(int status) {
+
 }
