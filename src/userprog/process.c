@@ -35,7 +35,7 @@ process_execute (const char *file_name)
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
-    return TID_ERROR;
+    return TID_ERROR;  
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
@@ -201,6 +201,8 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
 
+
+#define MAX_PARAMS 128
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
@@ -208,12 +210,26 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+  char *file_name_copy = malloc(strlen(file_name)+1); // file_name_copy = "echo x" because we need to copy the file_name to use strtok_r
+  strlcpy(file_name_copy, file_name, strlen(file_name)+1);
+  char *args[MAX_PARAMS];
+  int param_count = 0;
+  char *save_ptr;
+  char *token;
+  for (token = strtok_r(file_name_copy, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+  {
+    args[param_count++] = token;
+  }
+  //free file_name_copy
+  free(file_name_copy);
+
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
   bool success = false;
   int i;
+
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -302,7 +318,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, args, param_count))
     goto done;
 
   /* Start address. */
@@ -427,7 +443,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char *argv[],int const param_count) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -436,8 +452,53 @@ setup_stack (void **esp)
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
+      if (success){
+
+           *esp = (char *)PHYS_BASE;
+            char **arg_pointers = malloc(param_count * sizeof(char *)); // Allocate space for the argument pointers
+
+            if (!arg_pointers) {
+                palloc_free_page(kpage);
+                return false; // Early exit if memory allocation fails
+            }
+
+            // Push arguments onto the stack in reverse order
+            for (int i = param_count - 1; i >= 0; i--) {
+                *esp = (char *)(*esp) - (strlen(argv[i]) + 1);
+                memcpy(*esp, argv[i], strlen(argv[i]) + 1);
+                arg_pointers[i] = *esp; // Save the address of the argument
+            }
+
+            // Word align the stack pointer using bitwise operations to clear the last two bits of the address 
+            *esp = (void *)(((uintptr_t)*esp) & ~0x3);
+
+            // Push a null sentinel
+            *esp = (char *)(*esp) - sizeof(char *);
+            *(char **)(*esp) = NULL;
+
+            // Push pointers to arguments
+            for (int i = param_count - 1; i >= 0; i--) {
+                *esp = (char *)(*esp) - sizeof(char *);
+                *(char **)(*esp) = arg_pointers[i];
+            }
+
+            // Push the address of argv[0]
+            char **argv0 = (char **)*esp;
+            *esp = (char *)(*esp) - sizeof(char **);
+            *(char ***)(*esp) = argv0;
+
+            // Push argc
+            *esp = (char *)(*esp) - sizeof(int);
+            *(int *)(*esp) = param_count;
+
+            // Push a fake return address
+            *esp = (char *)(*esp) - sizeof(void *);
+            *(void **)(*esp) = NULL;
+
+            free(arg_pointers); // Free the memory allocated for argument pointers
+        }
+
+
       else
         palloc_free_page (kpage);
     }
