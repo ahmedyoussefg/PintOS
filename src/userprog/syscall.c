@@ -33,7 +33,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_EXIT:
       // handle exit
       int status = (int) *(sys_call_type+1); 
-      exit(status);
+      exit_wrapper(status);
       break;
   }
   //  TODO: ....continue rest of cases........ for remaining  syscalls
@@ -68,14 +68,14 @@ void exit(int status){
   // make sure no leaks
   // wake up all children (if exist)
   struct thread* current= thread_current();
-  process_exit();
+  // process_exit(); (RELEASE ALL RESOURCES-- called inside process_exit())
   
   // TODO: now iterate over each element in open_file and call close(e->fd)
   if (current->parent_process != NULL){
     struct thread * parent= current->parent_process;
     if(parent->waiting_on_which==current->tid){
       parent->child_status_after_wakeup=status;
-      semaup(&parent->wait_child);
+      sema_up(&parent->wait_child);
     }
     list_remove(&current->child_elem);
   }
