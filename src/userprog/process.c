@@ -42,14 +42,16 @@ process_execute (const char *file_name)
   thread_current()->latest_child_creation=false; // reset 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  
+
+  if (tid == TID_ERROR)
+    palloc_free_page (fn_copy); 
+
   sema_down(&thread_current()->parent_child_sync);
   if (!thread_current()->latest_child_creation) // unsuccessful attempt
   {
     tid = TID_ERROR;
   }
-
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
   return tid;
 }
 
@@ -518,7 +520,7 @@ setup_stack (void **esp, char *argv[],int const param_count)
             }
 
             // Push arguments onto the stack in reverse order
-            for (int i = param_count - 1; i >= 0; i--) {
+            for (int i = param_count - 1; i >= 1; i--) {
                 *esp = (char *)(*esp) - (strlen(argv[i]) + 1);
                 memcpy(*esp, argv[i], strlen(argv[i]) + 1);
                 arg_pointers[i] = *esp; // Save the address of the argument

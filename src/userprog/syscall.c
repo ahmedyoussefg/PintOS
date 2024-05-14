@@ -41,9 +41,20 @@ syscall_handler (struct intr_frame *f)
       // handle exit
       exit_wrapper(f);
       break;
+    case SYS_EXEC:
+      // handle exec
+      excecute_wrapper(f);
+      break;
   }
   //  TODO: ....continue rest of cases........ for remaining  syscalls
   thread_exit ();
+}
+
+void excecute_wrapper(struct intr_frame *f){
+  char ** ptr=(char**)f->esp+1;
+  validate_void_ptr(ptr);
+  char *file_name = (char *) *ptr;
+  f->eax=process_execute(file_name);   
 }
 
 // OUR syscalls implementation:

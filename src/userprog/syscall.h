@@ -3,4 +3,8 @@
 
 void syscall_init (void);
 
+void excecute_wrapper(struct intr_frame *f);
+
+
+
 #endif /* userprog/syscall.h */
