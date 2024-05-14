@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -37,10 +38,15 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;  
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  
+  thread_current()->latest_child_creation=false; // reset 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  // TODO (Go3): link child & parent threads 
+  sema_down(&thread_current()->parent_child_sync);
+  if (thread_current()->latest_child_creation) // unsuccessful attempt
+  {
+    tid = TID_ERROR;
+  }
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -62,12 +68,25 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-
+  struct thread * parent=thread_current()->parent_process;
+  if (parent != NULL) // if he has parent
+    parent->latest_child_creation=success; // set success state
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success) {
+    if (parent != NULL)
+      sema_up(&parent->parent_child_sync);
     thread_exit ();
-
+  }
+  else
+  {
+    if (parent != NULL){
+      // add the current (child) to list of child process in parent
+      list_insert(list_tail(&parent->child_processes), &thread_current()->child_elem);
+      sema_up(&parent->parent_child_sync);
+      sema_down(&thread_current()->parent_child_sync);
+    }
+  }
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -76,6 +95,24 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+/* Function to get the thread from tid, returns NULL if it doesnt exist*/
+struct thread *get_child_thread(tid_t child_tid){
+  struct thread* parent= thread_current();
+  struct list_elem *head= list_begin(&parent->child_processes);
+  if (head != list_end (&parent->child_processes)) 
+  {
+    struct list_elem *e;
+    struct thread *t;
+    for (e = list_next (head); e != list_end (&parent->child_processes); e = list_next (e))
+    {
+      t=list_entry(e,struct thread, child_elem);
+      if (t->tid==child_tid)
+        return t;
+    }
+  }
+  return NULL; // not found
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -90,8 +127,23 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  
-  return -1;
+  // verify pid is correct child
+  // make p.wait_on = child
+  // remove child from childrens of parent
+  //semaup child.parent_child_sync
+  //semadown p.wait_child
+  // return p.child_status
+  struct thread *child = get_child_thread(child_tid);
+  if (child == NULL) return -1; // no child found
+  struct thread *parent = thread_current();
+  if (parent->waiting_on_which != -999) return -1; // parent already waiting on a thread
+  parent->waiting_on_which=child_tid;
+  list_remove(&child->child_elem);
+  sema_up(&child->parent_child_sync);
+  sema_down(&child->parent_process->wait_child);
+  // reset waiting on which
+  parent->waiting_on_which=-999;
+  return parent->child_status_after_wakeup;
 }
 
 /* Free the current process's resources. */

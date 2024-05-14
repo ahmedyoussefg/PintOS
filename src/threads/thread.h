@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -97,7 +98,15 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 #endif
-
+   struct list child_processes; /*child processes/threads list*/
+   struct list_elem child_elem;              /* List element in child processes */
+   struct thread * parent_process; /* parent process/thread */
+   bool latest_child_creation; // check if it was successful or not
+   tid_t waiting_on_which; // which thread is it waiting on ? (to check if the parent is waiting on me)
+   int child_status_after_wakeup; // return in wait()
+   struct semaphore wait_child; // when parent waits on child
+   struct semaphore parent_child_sync; // synchronization (when parent sleeps)
+   struct list open_files; /* list of open files in the thread*/
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

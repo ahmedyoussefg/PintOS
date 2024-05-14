@@ -467,6 +467,18 @@ init_thread (struct thread *t, const char *name, int priority)
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+
+  list_init(&t->child_processes);
+  list_init(&t->open_files);
+  if (t != initial_thread)
+    t->parent_process=thread_current(); // make t's parent is current
+  else 
+    t->parent_process=NULL;
+  sema_init(&t->parent_child_sync,0);
+  sema_init(&t->wait_child,0);
+  t->child_status_after_wakeup=0;
+  t->latest_child_creation=0;
+  t->waiting_on_which=-999; // not used yet -999
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
