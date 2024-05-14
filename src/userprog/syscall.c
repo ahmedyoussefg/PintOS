@@ -60,14 +60,14 @@ void excecute_wrapper(struct intr_frame *f){
 // OUR syscalls implementation:
 /* Waits for a child process pid and retrieves the child's exit status. */
 void wait_wrapper (struct intr_frame *f) {
-  tid_t * ptr=(tid_t*)f->esp+1;
+  pid_t * ptr=(pid_t*)f->esp+1;
   validate_void_ptr(ptr);
-  tid_t pid = (tid_t) *ptr;
+  pid_t pid = (pid_t) *ptr;
   f->eax=wait(pid);   // return value
 }
 
-int wait(tid_t tid){
-  return process_wait((tid_t) tid); 
+int wait(pid_t tid){
+  return process_wait((pid_t) tid); 
 }
 
 void halt_wrapper(void)
