@@ -43,7 +43,7 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   sema_down(&thread_current()->parent_child_sync);
-  if (thread_current()->latest_child_creation) // unsuccessful attempt
+  if (!thread_current()->latest_child_creation) // unsuccessful attempt
   {
     tid = TID_ERROR;
   }
