@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "threads/thread.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -152,6 +153,27 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  if (cur->parent_process != NULL){
+    struct thread * parent= cur->parent_process;
+    if(parent->waiting_on_which==cur->tid){ // if the parent is waiting on this
+      sema_up(&parent->wait_child);         // sema up the parent
+    }
+    list_remove(&cur->child_elem);      // remove the current thread from parent's children
+  }
+
+  // waking up all childrens
+  struct list_elem *head= list_begin(&cur->child_processes);
+  if (head != list_end (&cur->child_processes)) 
+  {
+    struct list_elem *e;
+    struct thread *t;
+    for (e = list_next (head); e != list_end (&cur->child_processes); e = list_next (e))
+    {
+      t=list_entry(e,struct thread, child_elem);
+      sema_up(&t->parent_child_sync);
+    }
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

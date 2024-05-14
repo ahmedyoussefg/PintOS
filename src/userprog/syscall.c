@@ -83,28 +83,14 @@ void exit(int status){
   // process_exit(); (RELEASE ALL RESOURCES-- called inside process_exit())
   
   // TODO: now iterate over each element in open_file and call close(e->fd)
+
+  // if the parent is waiting for thread, give the parent the status of child exit
   if (current->parent_process != NULL){
     struct thread * parent= current->parent_process;
     if(parent->waiting_on_which==current->tid){
       parent->child_status_after_wakeup=status;
-      sema_up(&parent->wait_child);
-    }
-    list_remove(&current->child_elem);
-  }
-
-  // waking up all childrens
-  struct list_elem *head= list_begin(&current->child_processes);
-  if (head != list_end (&current->child_processes)) 
-  {
-    struct list_elem *e;
-    struct thread *t;
-    for (e = list_next (head); e != list_end (&current->child_processes); e = list_next (e))
-    {
-      t=list_entry(e,struct thread, child_elem);
-      sema_up(&t->parent_child_sync);
     }
   }
-
 
   // call exit_thread();
   thread_exit();  
