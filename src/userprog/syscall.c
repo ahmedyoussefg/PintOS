@@ -62,12 +62,12 @@ void excecute_wrapper(struct intr_frame *f){
 void wait_wrapper (struct intr_frame *f) {
   tid_t * ptr=(tid_t*)f->esp+1;
   validate_void_ptr(ptr);
-  pid_t pid = (pid_t) *ptr;
+  tid_t pid = (tid_t) *ptr;
   f->eax=wait(pid);   // return value
 }
 
-int wait(pid_t pid){
-  return process_wait((tid_t) pid); 
+int wait(tid_t tid){
+  return process_wait((tid_t) tid); 
 }
 
 void halt_wrapper(void)
