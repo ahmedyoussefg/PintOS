@@ -6,9 +6,17 @@
 #include "userprog/process.h"
 #include "devices/shutdown.h"
 #include "threads/synch.h"
+#include "threads/vaddr.h"
+#include "pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 
+void validate_void_ptr(void *ptr){
+  uint32_t * check =lookup_page(thread_current()->pagedir, ptr, false);
+  if (ptr == NULL && !is_user_vaddr(ptr) && check == NULL ){
+    exit(-1); // error
+  }
+}
 void
 syscall_init (void) 
 {
@@ -19,7 +27,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   printf ("system call!\n");
-  /*Go3: this was just for trial, remove till before thread_exit(); line*/
+  validate_void_ptr(f->esp);
   int *sys_call_type= (int *)f->esp;
 
   /* Inside each syscall wrapper : call validate_void_ptr: check if ptr not null, 
@@ -27,13 +35,11 @@ syscall_handler (struct intr_frame *f)
   switch (*sys_call_type){
     case SYS_WAIT:
       // handle wait
-      pid_t pid = (pid_t) *(sys_call_type+1); 
-      int child_exit_status = wait_wrapper(pid);
+      wait_wrapper(f);
       break;
     case SYS_EXIT:
       // handle exit
-      int status = (int) *(sys_call_type+1); 
-      exit_wrapper(status);
+      exit_wrapper(f);
       break;
   }
   //  TODO: ....continue rest of cases........ for remaining  syscalls
@@ -42,8 +48,11 @@ syscall_handler (struct intr_frame *f)
 
 // OUR syscalls implementation:
 /* Waits for a child process pid and retrieves the child's exit status. */
-int wait_wrapper (pid_t pid) {
-  return wait(pid);
+void wait_wrapper (struct intr_frame *f) {
+  tid_t * ptr=(tid_t*)f->esp+1;
+  validate_void_ptr(ptr);
+  pid_t pid = (pid_t) *ptr;
+  f->eax=wait(pid);   // return value
 }
 
 int wait(pid_t pid){
@@ -60,7 +69,10 @@ void halt(void){
   shutdown_power_off();
 }
 
-void exit_wrapper(int status) {
+void exit_wrapper(struct intr_frame *f) {
+  int * ptr=(int*)f->esp+1;
+  validate_void_ptr(ptr);
+  int status = (int) *ptr; 
   exit(status);
 }
 void exit(int status){
