@@ -31,6 +31,5 @@ void seek_wrapper(struct intr_frame *f);
 void seek(int fd, unsigned position);
 void tell_wrapper(struct intr_frame *f);
 unsigned tell(int fd);
-bool validate_file_name(char *file);
 struct file *get_file(int fd);
 #endif /* userprog/syscall.h */

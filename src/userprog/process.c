@@ -20,6 +20,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "process.h"
+#include "syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -156,7 +157,7 @@ process_wait (tid_t child_tid UNUSED)
   sema_down(&child->parent_process->wait_child);
   // reset waiting on which
   parent->waiting_on_which=-999;
-  list_remove(&child->chlid_elem); // remove the child from parent's list of children
+  list_remove(&child->child_elem); // remove the child from parent's list of children
   return parent->child_status_after_wakeup;
 }
 
@@ -173,7 +174,7 @@ process_exit (void)
       sema_up(&parent->wait_child);         // sema up the parent
     } // the child will be removed when parent returns from blocking state, in wait function
     else { 
-      list_remove(&chr->chlid_elem); // remove the child from parent's list of children
+      list_remove(&cur->child_elem); // remove the child from parent's list of children
     }
   }
 

@@ -90,7 +90,7 @@ syscall_handler (struct intr_frame *f)
 // OUR syscalls implementation:
 /* Execute */
 void execute_wrapper(struct intr_frame *f){
-  char ** ptr=(char**)f->esp+1;
+  int *ptr=(int *)f->esp+1;
   validate_void_ptr(ptr);
   char *file_name = (char *) *ptr;
   f->eax=execute(file_name);   
@@ -107,7 +107,7 @@ pid_t execute(char *file_name){
 /*WAIT*/
 /* Waits for a child process pid and retrieves the child's exit status. */
 void wait_wrapper (struct intr_frame *f) {
-  pid_t * ptr=(pid_t*)f->esp+1;
+  int *ptr=(int *)f->esp+1;
   validate_void_ptr(ptr);
   pid_t pid = (pid_t) *ptr;
   f->eax=wait(pid);   // return value
@@ -134,7 +134,7 @@ void halt(void){
 
 /* Exit */
 void exit_wrapper(struct intr_frame *f) {
-  int * ptr=(int*)f->esp+1;
+  int *ptr=(int *)f->esp+1;
   validate_void_ptr(ptr);
   int status = (int) *ptr; 
   exit(status);
@@ -167,25 +167,21 @@ void exit(int status){
 
 /*Create a file without openning it with an initial size*/
 void create_wrapper(struct intr_frame *f){
-  char **ptr_filename=((char **)f->esp+1);
-  validate_void_ptr(ptr_filename);
-  char *file_name=(char *)*ptr_filename;
-  int *ptr_initial_size=((int *)f->esp+2);
-  validate_void_ptr(ptr_initial_size);
-  int initial_size= *ptr_initial_size;
+  int *ptr1=(int *)f->esp+1;
+  validate_void_ptr(ptr1);
+  char *file_name=(char *)*ptr1;
+  int *ptr2=(int *)f->esp + 2;
+  validate_void_ptr(ptr2);
+  unsigned initial_size= (unsigned) *ptr2;
   f->eax=create(file_name, initial_size);
 }
 
 bool create(const char *file,unsigned initial_size){
     /*try to create the file*/
     /*Error cases=>
-    *1.)file name is wrong 
-    *2.)file already exists
-    *3.)internal memory allocation fails
+    *1.)file already exists
+    *2.)internal memory allocation fails
     */
-  if(!validate_file_name(file)){
-    return false;
-  }
   return filesys_create(file, initial_size);
 }
 
@@ -197,16 +193,13 @@ bool create(const char *file,unsigned initial_size){
 *Returns true if successful, false otherwise.
 */
 void remove_wrapper(struct intr_frame *f){
-  char **ptr_file_name=((char **)f->esp+1);
-  validate_void_ptr(ptr_file_name);
-  char *file_name=(char *)*ptr_file_name;
+  int *ptr=(int *)f->esp+1;
+  validate_void_ptr(ptr);
+  char *file_name=(char *)*ptr;
   f->eax=remove(file_name);  
 }
 
 bool remove(const char *file){
-  if(!validate_file_name(file)){
-    return false;
-  }
   return filesys_remove(file); 
 }
 
@@ -219,16 +212,13 @@ bool remove(const char *file){
 *or -1 if the file could not be opened.
 */
 void open_wrapper(struct intr_frame *f){
-  char *ptr_file_name=((char **)f->esp+1);
-  validate_void_ptr(ptr_file_name);
-  char *file_name=(char *)*ptr_file_name;
+  int *ptr=(int *)f->esp+1;
+  validate_void_ptr(ptr);
+  char *file_name=(char *)*ptr;
   f->eax=open(file_name);
 }
 
 int open(const char *file){
-  if(!validate_file_name(file)){
-    return -1;
-  }
   static unsigned long current_fd=2;//standard to file, 0=>stdin, 1=>stdout
   lock_acquire(&files_sync_lock);
   struct file *opened_file=filesys_open(file);
@@ -250,9 +240,9 @@ int open(const char *file){
 /*FILE SIZE*/
 /*Returns the size, in bytes, of the file open as fd.*/
 void filesize_wrapper(struct intr_frame *f){
-  int *ptr_fd=((int *)f->esp+1);
-  validate_void_ptr(ptr_fd);
-  int fd=*ptr_fd;
+  int *ptr=(int *)f->esp+1;
+  validate_void_ptr(ptr);
+  int fd=*ptr;
   f->eax=size(fd);
 }
 
@@ -274,17 +264,17 @@ int size(int fd){
 *Fd 0 reads from the keyboard using input_getc().
 */
 void read_wrapper(struct intr_frame *f){
-  int *ptr_fd=((int *)f->esp+1);
-  validate_void_ptr(ptr_fd);
-  int fd=*ptr_fd;
+  int *ptr1=(int *)f->esp+1;
+  validate_void_ptr(ptr1);
+  int fd=(int)*ptr1;
 
   //make pointer to buffer
-  void *ptr_buffer=(void *)*((int *)f->esp+2);
-  validate_void_ptr(ptr_buffer);
-  void *buffer = (void *)ptr_buffer;
-  unsigned *ptr_size = ((int *)f->esp+3);
-  validate_void_ptr(ptr_size);
-  unsigned size=(unsigned) *ptr_size;
+  int *ptr2=(int *)f->esp+2;
+  validate_void_ptr(ptr2);
+  void *buffer = (void *) *ptr2;
+  int *ptr3=(int *)f->esp+3;
+  validate_void_ptr(ptr3);
+  unsigned size=(unsigned) *ptr3;
   f->eax=read(fd, buffer, size);
 }
 
@@ -295,7 +285,7 @@ int read(int fd,void * buffer, unsigned size){
   * fd>1=>read from the file     (file)
   */
   if(fd==0){
-    for(int i=0;i<size;i++){
+    for(unsigned int i=0;i<size;i++){
       lock_acquire(&files_sync_lock);
       ((char *)buffer)[i]=input_getc();
       lock_release(&files_sync_lock);
@@ -329,18 +319,17 @@ int read(int fd,void * buffer, unsigned size){
 */
 void write_wrapper(struct intr_frame *f){
   
-  int *ptr_fd=((int *)f->esp+1);
-  validate_void_ptr(ptr_fd);
-  int fd=*ptr_fd;
+  int *ptr1=(int *)f->esp+1;
+  validate_void_ptr(ptr1);
+  int fd=(int)*ptr1;
 
-  
-  void *ptr_buffer=(void *)*((int *)f->esp+2);
-  validate_void_ptr(ptr_buffer);
-  void *buffer=(void *)*ptr_buffer;
+  int *ptr2=(int *)f->esp+2;
+  validate_void_ptr(ptr2);
+  void *buffer=(void *)*ptr2;
 
-  unsigned *ptr_size = ((int *)f->esp+3);
-  validate_void_ptr(ptr_size);
-  unsigned size=(unsigned) *ptr_size;
+  int *ptr3=(int *)f->esp+3;
+  validate_void_ptr(ptr3);
+  unsigned size=(unsigned) *ptr3;
   
   f->eax=write(fd, buffer, size);
 }
@@ -364,7 +353,7 @@ int write(int fd, const void *buffer, unsigned size){
     if(file==NULL){
       return 0;
     }
-    struct thread *current=thread_current();
+    // struct thread *current=thread_current();
     lock_acquire(&files_sync_lock);
     number_of_bytes_written=file_write(file,buffer,size);
     lock_release(&files_sync_lock);
@@ -381,13 +370,13 @@ int write(int fd, const void *buffer, unsigned size){
 *(Thus, a position of 0 is the file's start.)
 */
 void seek_wrapper(struct intr_frame *f){
-  int *ptr_fd=((int *)f->esp+1);
-  validate_void_ptr(ptr_fd);
-  int fd=*ptr_fd;
+  int *ptr1=(int *)f->esp+1;
+  validate_void_ptr(ptr1);
+  int fd=(int) *ptr1;
 
-  unsigned *ptr_position = ((int *)f->esp+2);
-  validate_void_ptr(ptr_position);
-  unsigned position=(unsigned) *ptr_position;
+  int *ptr2=(int *)f->esp+2;
+  validate_void_ptr(ptr2);
+  unsigned position=(unsigned) *ptr2;
 
   seek(fd,position);
 }
@@ -408,9 +397,9 @@ void seek(int fd,unsigned position){
 open file fd, expressed in bytes from the beginning of the file.*/
 
 void tell_wrapper(struct intr_frame *f){
-  int *ptr_fd=((int *)f->esp+1);
-  validate_void_ptr(ptr_fd);
-  int fd=*ptr_fd;
+  int *ptr=(int *)f->esp+1;
+  validate_void_ptr(ptr);
+  int fd=*ptr;
   f->eax=tell(fd);
 }
 
@@ -431,9 +420,9 @@ unsigned tell(int fd){
 *as if by calling this function for each one.
 */
 void close_wrapper(struct intr_frame *f){
-  int *ptr_fd=((int *)f->esp+1);
-  validate_void_ptr(ptr_fd);
-  int fd=*ptr_fd;
+  int *ptr=(int *)f->esp+1;
+  validate_void_ptr(ptr);
+  int fd=*ptr;
   close(fd);
 }
 void close(int fd){
@@ -464,21 +453,6 @@ struct file *get_file(int fd){
   return NULL;
 }
 
-/*VALID FILE NAME*/
-/*CHECK IF THE FILE NAME IS VALID*/
-bool validate_file_name(const char *file){
-  if(file==NULL) return false;
-  
-  char bad_chars[] = "!%@^*~|";
-  bool invalid_character_found=false;
-  for(int i=0;i<strlen(bad_chars);i++){
-    if(strchr(file,bad_chars[i])!=NULL){
-      invalid_character_found=true;
-      break;
-    }
-  }
-  return !invalid_character_found;
-}
 
 /*VALID VOID POINTER*/
 void validate_void_ptr(void *ptr){
