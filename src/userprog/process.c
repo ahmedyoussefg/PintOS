@@ -602,8 +602,6 @@ setup_stack (void **esp, char *argv[],int const param_count)
 
             free(arg_pointers); // Free the memory allocated for argument pointers
         }
-
-
       else
         palloc_free_page (kpage);
     }
