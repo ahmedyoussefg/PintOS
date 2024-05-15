@@ -3,466 +3,351 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "userprog/process.h"
-#include "devices/shutdown.h"
-#include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "pagedir.h"
-#include "filesys/filesys.h"
 #include "filesys/file.h"
-#include "filesys/inode.h"
-#include "filesys/directory.h"
-#include "filesys/free-map.h"
-#include "lib/kernel/list.h"
-#include "lib/user/syscall.h"
-#include "devices/input.h"
-#include "threads/malloc.h"
+#include "filesys/filesys.h"
+#include "userprog/pagedir.h"
 
-#define INVALID_POSITION -1
+// wrapper functions for system call functions
+// extract the parameters of from the stack pointer
+// and paas them correctly to the system call function
+void halt_wrapper (void);
+void exit_wrapper (void);
+pid_t exec_wrapper (void);
+int wait_wrapper (void);
+bool create_wrapper (void);
+bool remove_wrapper (void);
+int open_wrapper (void);
+int filesize_wrapper (void);
+int read_wrapper (void);
+int write_wrapper (void);
+void seek_wrapper (void);
+unsigned tell_wrapper (void);
+void close_wrapper (void);
 
+void validate_address (void *address);
+void* get_void_pointer (void*** stack_pointer);
+char* get_char_pointer (char*** stack_pointer);
+int get_int (int **stack_pointer);
+void* stack_pointer;
+// struct list all_files;
+struct lock file_system_lock;
 
 static void syscall_handler (struct intr_frame *);
-static struct lock files_sync_lock;
-
-
 
 void
-syscall_init (void) 
+syscall_init (void)
 {
+  lock_init (&file_system_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
 static void
-syscall_handler (struct intr_frame *f) 
+syscall_handler (struct intr_frame *f UNUSED)
 {
-  printf ("system call!\n");
-  validate_void_ptr(f->esp);  
-  int *sys_call_type= (int *)f->esp;//stack pointer
-
-  /* Inside each syscall wrapper : call validate_void_ptr: check if ptr not null, 
-   * check if user vaddr , ptr correctly mapped to virtual address*/
-  switch (*sys_call_type){
-    case SYS_WAIT:
-      wait_wrapper(f);
-      break;
-    case SYS_EXIT:
-      exit_wrapper(f);
-      break;
-    case SYS_EXEC:
-      execute_wrapper(f);
-      break;
+  stack_pointer = f->esp;
+  validate_address (f->esp);
+  int sys_call = get_int ((int**) &stack_pointer);
+  switch (sys_call)
+  {
     case SYS_HALT:
-      halt_wrapper();
-      break;
+        halt_wrapper ();
+        break;
+    case SYS_EXIT:
+        exit_wrapper ();
+        break;
+    case SYS_EXEC:
+        f->eax = exec_wrapper ();
+        break;
+    case SYS_WAIT:
+        f->eax = wait_wrapper ();
+        break;
     case SYS_CREATE:
-      create_wrapper(f);
-      break;
+        f->eax = create_wrapper ();
+        break;
     case SYS_REMOVE:
-      remove_wrapper(f);
-      break;
+        f->eax = remove_wrapper ();
+        break;
     case SYS_OPEN:
-      open_wrapper(f);
-      break;
+        f->eax = open_wrapper ();
+        break;
     case SYS_FILESIZE:
-      filesize_wrapper(f);
-      break;
+        f->eax = filesize_wrapper ();
+        break;
     case SYS_READ:
-      read_wrapper(f);
-      break;
+        f->eax = read_wrapper ();
+        break;
     case SYS_WRITE:
-      write_wrapper(f);
-      break;
+        f->eax = write_wrapper ();
+        break;
     case SYS_SEEK:
-      seek_wrapper(f);
-      break;
+        seek_wrapper ();
+        break;
     case SYS_TELL:
-      tell_wrapper(f);
-      break;
+        f->eax = tell_wrapper ();
+        break;
     case SYS_CLOSE:
-      close_wrapper(f);
+        close_wrapper ();
+        break;
+    default:
       break;
   }
-  thread_exit ();
 }
 
-// OUR syscalls implementation:
-/* Execute */
-void execute_wrapper(struct intr_frame *f){
-  char ** ptr=(char**)f->esp+1;
-  validate_void_ptr(ptr);
-  char *file_name = (char *) *ptr;
-  f->eax=execute(file_name);   
-}
 
-pid_t execute(char *file_name){
-  return process_execute(file_name);
-}
-
-/*=============================================================================*/
-
-/* SYSCALLS IMPLEMENTATION: */
-
-/*WAIT*/
-/* Waits for a child process pid and retrieves the child's exit status. */
-void wait_wrapper (struct intr_frame *f) {
-  pid_t * ptr=(pid_t*)f->esp+1;
-  validate_void_ptr(ptr);
-  pid_t pid = (pid_t) *ptr;
-  f->eax=wait(pid);   // return value
-}
-
-int wait(pid_t tid){
-  return process_wait((pid_t) tid); 
-}
-
-/*=============================================================================*/
-
-/* Halt */
-void halt_wrapper(void)
+void
+halt_wrapper (void)
 {
-  halt();
-}
 
-void halt(void){
-  // handle halt
   shutdown_power_off();
 }
 
-/*=============================================================================*/
-
-/* Exit */
-void exit_wrapper(struct intr_frame *f) {
-  int * ptr=(int*)f->esp+1;
-  validate_void_ptr(ptr);
-  int status = (int) *ptr; 
-  exit(status);
-}
-
-void exit(int status){
-  // release all resources (close files USING close sys call) / resources using process_exit()
-  // make sure no leaks
-  // wake up all children (if exist)
-  struct thread* current= thread_current();
-  // process_exit(); (RELEASE ALL RESOURCES-- called inside process_exit())
-  
-  process_exit();
-
-  // TODO: now iterate over each element in open_file and call close(e->fd)
-
-  // if the parent is waiting for thread, give the parent the status of child exit
-  if (current->parent_process != NULL){
-    struct thread * parent= current->parent_process;
-    if(parent->waiting_on_which==current->tid){
-      parent->child_status_after_wakeup=status;
+void
+exit (int status)
+{
+  struct thread* child = thread_current ();
+  struct thread* parent = get_thread (child->parent_id);
+  if (parent != NULL) // update child info of the parent
+  {
+    struct child_info* child_info_elem = get_child_from_parent (parent, child->tid);
+    if (child_info_elem != NULL)
+    {
+      lock_acquire (&parent->parent_waiting_lock);
+      child_info_elem->exit_status = status;
+      lock_release (&parent->parent_waiting_lock);
     }
   }
 
-  // call exit_thread();
-  thread_exit();  
+  child->exit_status = status;
+  thread_exit ();
 }
 
-/*=============================================================================*/
-
-/*Create a file without openning it with an initial size*/
-void create_wrapper(struct intr_frame *f){
-  char **ptr_filename=((char **)f->esp+1);
-  validate_void_ptr(ptr_filename);
-  char *file_name=(char *)*ptr_filename;
-  int *ptr_initial_size=((int *)f->esp+2);
-  validate_void_ptr(ptr_initial_size);
-  int initial_size= (int) *((int *)f->esp+2);
-  f->eax=create(file_name, initial_size);
+void
+exit_wrapper (void)
+{
+  int status = get_int ((int**) &stack_pointer);
+  exit (status);
 }
 
-bool create(const char *file,unsigned initial_size){
-    /*try to create the file*/
-    /*Error cases=>
-    *1.)file name is wrong 
-    *2.)file already exists
-    *3.)internal memory allocation fails
-    */
-  if(!validate_file_name(file)){
-    return false;
+pid_t
+exec_wrapper (void)
+{
+  char *cmd_line = get_char_pointer ((char***) &stack_pointer);
+  // return process_execute (cmd_line);
+  int pid = process_execute (cmd_line);
+  if (pid == -1) return -1;
+
+  sema_down (&thread_current ()->exec_sema);
+  struct child_info* child = get_child_from_parent(thread_current(), pid);
+  if (child != NULL && child->is_loaded == false) return -1;
+  return pid;
+}
+
+int
+wait_wrapper (void)
+{
+  int pid = get_int ((int**) &stack_pointer);
+  return process_wait (pid);
+}
+
+bool
+create_wrapper (void)
+{
+  char* file = get_char_pointer ((char***) &stack_pointer);
+  unsigned initial_size = get_int ((int**) &stack_pointer);
+  lock_acquire (&file_system_lock);
+  bool create_status = filesys_create (file, initial_size);
+  lock_release (&file_system_lock);
+  return create_status;
+}
+
+bool
+remove_wrapper (void)
+{
+  char* file = get_void_pointer ((char***) &stack_pointer);
+  lock_acquire (&file_system_lock);
+  bool remove_status = filesys_remove (file);
+  lock_release (&file_system_lock);
+  return remove_status;
+}
+
+int
+open_wrapper (void)
+{
+  struct thread* cur = thread_current ();
+  char* file_name = get_char_pointer ((char***) &stack_pointer);
+  lock_acquire (&file_system_lock);
+  struct file* file = filesys_open (file_name);
+  int descriptor_return = -1;
+  if (file != NULL)
+  {
+    struct file_descriptor *file_des = malloc (sizeof (struct file_descriptor));
+    file_des->file = file;
+    file_des->fid = cur->fid_generator++;
+    descriptor_return = file_des->fid;
+    list_push_back (&cur->files, &file_des->thread_elem);
+    // list_push_back (&all_files, &file_des->elem);
   }
-  return filesys_create(file, initial_size);
+  lock_release (&file_system_lock);
+  return descriptor_return;
 }
 
-/*=============================================================================*/
-
-/*Remove a file*/
-/*
-*Deletes the file called file.
-*Returns true if successful, false otherwise.
-*/
-void remove_wrapper(struct intr_frame *f){
-  char *file_name=(char *)*((int *)f->esp+1);
-  validate_void_ptr(file_name);
-  f->eax=remove(file_name);  
-}
-
-bool remove(const char *file){
-  if(!validate_file_name(file)){
-    return false;
+int
+filesize_wrapper (void)
+{
+  struct thread* cur = thread_current ();
+  int fid = get_int ((int**) &stack_pointer);
+  lock_acquire (&file_system_lock);
+  struct file_descriptor* file_des = get_file_descriptor (cur, fid);
+  int length = -1;
+  if (file_des != NULL)
+  {
+    struct file* file = file_des->file;
+    length = file_length (file);
   }
-  return filesys_remove(file); 
+  lock_release (&file_system_lock);
+  return length;
 }
 
-/*=============================================================================*/
+int
+read_wrapper (void)
+{
+  int fd = get_int ((int**) &stack_pointer);
+  void* buffer = get_void_pointer ((void***) &stack_pointer);
+  unsigned length = get_int ((int**) &stack_pointer);
+  int ret_value = length;
+  lock_acquire (&file_system_lock);
 
-/*OPEN*/
-/*
-*Opens the file called file.
-*Returns a nonnegative integer handle called a "file descriptor" (fd),
-*or -1 if the file could not be opened.
-*/
-void open_wrapper(struct intr_frame *f){
-  char *file_name=(char *)*((int *)f->esp+1);
-  validate_void_ptr(file_name);
-  f->eax=open(file_name);
-}
-
-int open(const char *file){
-  if(!validate_file_name(file)){
-    return -1;
-  }
-  static unsigned long current_fd=2;//standard to file, 0=>stdin, 1=>stdout
-  lock_acquire(&files_sync_lock);
-  struct file *opened_file=filesys_open(file);
-  lock_release(&files_sync_lock);
-  if(opened_file==NULL){
-    return -1;
-  }
-  struct open_file *thread_files=(struct open_file *)malloc(sizeof(struct open_file));
-  thread_files->file=opened_file;
-  int temp_fd=current_fd;
-  thread_files->fd=current_fd;
-  current_fd++;
-  list_push_back(&thread_current()->open_files,&thread_files->elem);
-  return temp_fd;
-}
-
-/*=============================================================================*/
-
-/*FILE SIZE*/
-/*Returns the size, in bytes, of the file open as fd.*/
-void filesize_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
-  f->eax=size(fd);
-}
-
-int size(int fd){
-  struct file *file = get_file(fd);
-  if(file==NULL){
-    return -1;
-  }
-  return file_length(file);
-}
-
-/*=============================================================================*/
-
-/*READ*/
-/*
-*Reads size bytes from the file open as fd into buffer. 
-*Returns the number of bytes actually read (0 at end of file),
-*or -1 if the file could not be read (due to a condition other than end of file).
-*Fd 0 reads from the keyboard using input_getc().
-*/
-void read_wrapper(struct intr_frame *f){
-  int *ptr_fd=((int *)f->esp+1);
-  validate_void_ptr(ptr_fd);
-  int fd=*ptr_fd;
-  void *ptr_buffer=((int *)f->esp+2);
-  validate_void_ptr(ptr_buffer);
-  void *buffer = (void *)ptr_buffer;
-  unsigned *ptr_size = ((int *)f->esp+3);
-  validate_void_ptr(ptr_size);
-  unsigned size=(unsigned) *ptr_size;
-  f->eax=read(fd, buffer, size);
-}
-
-int read(int fd,void * buffer, unsigned size){
-  /*Read cases according to the file descriptor
-  * fd=0=>read from the keyboard (stdin)
-  * fd=1=>write to the console   (stdout)
-  * fd>1=>read from the file     (file)
-  */
-  if(fd==0){
-    for(int i=0;i<size;i++){
-      lock_acquire(&files_sync_lock);
-      ((char *)buffer)[i]=input_getc();
-      lock_release(&files_sync_lock);
-    }
-    return size;
-  } 
-  else if(fd==1){
-    //Negative area 
-    return -1;
-  }
-  else{
-    //Get the file from fd by searching in the open_files list of the current thread
-    struct file *file = get_file(fd);
-    if(file==NULL){
-      return -1;
-    }
-    lock_acquire(&files_sync_lock);
-    int bytes_read=file_read(file,buffer,size);
-    lock_release(&files_sync_lock);
-    return size;
-  }       
-}
-
-/*=============================================================================*/
-
-/*WRITE*/
-/*
-*Writes size bytes from buffer to the open file fd. 
-*Returns the number of bytes actually written,
-*which may be less than size if some bytes could not be written.
-*/
-void write_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
-  void *buffer=(void *)*((int *)f->esp+2);
-  validate_void_ptr(buffer);
-  unsigned size=(unsigned) *((int *)f->esp+3);
-  validate_void_ptr(size);
-  f->eax=write(fd, buffer, size);
-}
-
-int write(int fd, const void *buffer, unsigned size){
-  int number_of_bytes_written=0;
-  /*
-  Fd 1 writes to the console. Your code to write to the console 
-  should write all of buffer in one call to putbuf(), at least as long as
-  size is not bigger than a few hundred bytes.
-  (It is reasonable to break up larger buffers.) 
-  Otherwise, lines of text output by different processes may end 
-  up interleaved on the console, confusing both human readers and our grading scripts.
-  */
-  if(fd==1){
-     putbuf(buffer,size);
-     number_of_bytes_written=size;  
-  }
-  else{
-    struct file *file = get_file(fd);
-    if(file==NULL){
-      return 0;
-    }
-    struct thread *current=thread_current();
-    lock_acquire(&files_sync_lock);
-    number_of_bytes_written=file_write(file,buffer,size);
-    lock_release(&files_sync_lock);
-  }
-  return number_of_bytes_written;
-}
-
-/*=============================================================================*/
-
-/*SEEK*/
-/*
-*Changes the next byte to be read or written in open file fd to position, expressed in bytes
-*from the beginning of the file.
-*(Thus, a position of 0 is the file's start.)
-*/
-void seek_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
-  unsigned position=(unsigned) *((int *)f->esp+2);
-  validate_void_ptr(position);
-  seek(fd,position);
-}
-void seek(int fd,unsigned position){
-  struct file *seeked_file=get_file(fd);
-  if(seeked_file==NULL){
-    return;
-  }
-  lock_acquire(&files_sync_lock);
-  file_seek(seeked_file,position);
-  lock_release(&files_sync_lock);
-}
-
-/*=============================================================================*/
-
-/*TELL*/
-/*Returns the position of the next byte to be read or written in 
-open file fd, expressed in bytes from the beginning of the file.*/
-
-void tell_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
-  f->eax=tell(fd);
-}
-
-unsigned tell(int fd){
-  struct file *file=get_file(fd);
-  if(file==NULL){
-    return INVALID_POSITION;
-  }
-  return file_tell(file);
-}
-
-/*=============================================================================*/
-
-/*CLOSE*/
-/*
-*Closes file descriptor fd.
-*Exiting or terminating a process implicitly closes all its open file descriptors,
-*as if by calling this function for each one.
-*/
-void close_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
-  close(fd);
-}
-void close(int fd){
-  struct file *file=get_file(fd);
-  if(file==NULL){
-    return;
-  }
-  file_close(file);
-}
-
-/*=============================================================================*/
-
-/*HELPER FUNCTIONS*/
-
-/*GET FILE FROM THE FILE DESCRIPTOR*/
-struct file *get_file(int fd){
-
-  struct thread* current_thread=thread_current();
-  struct list_elem *e;
-  for(e=list_begin(&current_thread->open_files);
-      e!=list_end(&current_thread->open_files);
-      e=list_next(e)){
-      struct open_file *opened_file=list_entry(e,struct open_file,elem);
-      if(opened_file->fd==fd){
-        return opened_file->file;
-      }
-  }
-  return NULL;
-}
-
-/*VALID FILE NAME*/
-/*CHECK IF THE FILE NAME IS VALID*/
-bool validate_file_name(const char *file){
-  if(file==NULL) return false;
-  
-  char bad_chars[] = "!%@^*~|";
-  bool invalid_character_found=false;
-  for(int i=0;i<strlen(bad_chars);i++){
-    if(strchr(file,bad_chars[i])!=NULL){
-      invalid_character_found=true;
-      break;
+  if (fd == 0) // read from keyboard
+  {
+    for (int i = 0; i < length; i++)
+    {
+      uint8_t value = input_getc (); // uint8_t as defined in the library :(
+      *((uint8_t*) buffer) = value;
+      buffer += sizeof(uint8_t);
     }
   }
-  return !invalid_character_found;
+  else
+  {
+    struct file_descriptor* file_desc = get_file_descriptor (thread_current (), fd);
+    if (file_desc == NULL) // File not open
+      ret_value = -1;
+    else
+    {
+      struct file* file = file_desc->file;
+      ret_value = file_read (file, buffer, length);
+    }
+  }
+
+  lock_release (&file_system_lock);
+  return ret_value;
 }
 
-/*VALID VOID POINTER*/
-void validate_void_ptr(void *ptr){
-  uint32_t * check =lookup_page(thread_current()->pagedir, ptr, false);
-  if (ptr == NULL && !is_user_vaddr(ptr) && check == NULL ){
-    exit(-1); // error
+int
+write_wrapper (void)
+{
+  int fd = get_int ((int**) &stack_pointer);
+  void* buffer = get_void_pointer ((void***) &stack_pointer);
+  unsigned length = get_int ((int**) &stack_pointer);
+  int ret_value = length;
+  lock_acquire (&file_system_lock);
+
+  if (fd == 1)
+    putbuf (buffer, length);
+  else
+  {
+    struct file_descriptor* file_desc = get_file_descriptor (thread_current (), fd);
+    if (file_desc == NULL) // File not open
+      ret_value = -1;
+    else // actual write
+    {
+      struct file* file = file_desc->file;
+      ret_value = file_write (file, buffer, length);
+    }
   }
+
+  lock_release (&file_system_lock);
+  return ret_value;
+}
+
+void
+seek_wrapper (void)
+{
+  int fd = get_int ((int**) &stack_pointer);
+  unsigned position = get_int ((int**) &stack_pointer);
+  lock_acquire (&file_system_lock);
+  struct file_descriptor* file_desc = get_file_descriptor (thread_current (), fd);
+  if (file_desc != NULL)
+  {
+    struct file* file = file_desc->file;
+    file_seek (file, position);
+  }
+  lock_release (&file_system_lock);
+}
+
+unsigned
+tell_wrapper (void)
+{
+  int fd = get_int ((int**) &stack_pointer);
+  int ret_value = 0;
+  lock_acquire (&file_system_lock);
+  struct file_descriptor* file_desc = get_file_descriptor (thread_current (), fd);
+  if (file_desc == NULL) // File not open
+    ret_value = 0;
+  else // actual write
+  {
+    struct file* file = file_desc->file;
+    ret_value = file_tell (file);
+  }
+  lock_release (&file_system_lock);
+  return ret_value;
+}
+
+void
+close_wrapper (void)
+{
+  int fd = get_int ((int**) &stack_pointer);
+  struct file_descriptor* file_desc = get_file_descriptor (thread_current (), fd);
+  if (file_desc != NULL)
+  {
+    list_remove (&file_desc->thread_elem);
+    file_close (file_desc->file);
+    free (file_desc);
+  }
+}
+
+void*
+get_void_pointer (void*** esp)
+{
+  validate_address (stack_pointer);
+  void* ret = **esp;
+  (*esp)++;
+  validate_address (ret);
+  return ret;
+}
+char*
+get_char_pointer (char*** esp)
+{
+  validate_address (stack_pointer);
+  char* ret = **esp;
+  (*esp)++;
+  validate_address (ret);
+  return ret;
+}
+
+int
+get_int (int **esp)
+{
+  validate_address (stack_pointer);
+  int ret = **esp;
+  (*esp)++;
+  return ret;
+}
+
+void
+validate_address (void *address)
+{
+  if (address == NULL ||
+      is_kernel_vaddr (address) /*Accessing kernel address*/ ||
+      pagedir_get_page (thread_current ()->pagedir, address) == NULL) exit (-1);
 }
