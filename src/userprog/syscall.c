@@ -6,21 +6,26 @@
 #include "userprog/process.h"
 #include "devices/shutdown.h"
 #include "threads/synch.h"
-
-#define INVALID_POSITION -1
 #include "threads/vaddr.h"
 #include "pagedir.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "filesys/inode.h"
+#include "filesys/directory.h"
+#include "filesys/free-map.h"
+#include "lib/kernel/list.h"
+#include "lib/user/syscall.h"
+#include "devices/input.h"
+#include "threads/malloc.h"
+
+#define INVALID_POSITION -1
+
 
 static void syscall_handler (struct intr_frame *);
 static struct lock files_sync_lock;
 
 
-void validate_void_ptr(void *ptr){
-  uint32_t * check =lookup_page(thread_current()->pagedir, ptr, false);
-  if (ptr == NULL && !is_user_vaddr(ptr) && check == NULL ){
-    exit(-1); // error
-  }
-}
+
 void
 syscall_init (void) 
 {
@@ -38,61 +43,45 @@ syscall_handler (struct intr_frame *f)
    * check if user vaddr , ptr correctly mapped to virtual address*/
   switch (*sys_call_type){
     case SYS_WAIT:
-      // handle wait
       wait_wrapper(f);
       break;
     case SYS_EXIT:
-      // handle exit
       exit_wrapper(f);
       break;
     case SYS_EXEC:
-      // handle exec
       execute_wrapper(f);
       break;
+    case SYS_HALT:
+      halt_wrapper();
+      break;
     case SYS_CREATE:
-      char *file_name=(char *)*((int *)f->esp+1);
-      int initial_size= (int) *((int *)f->esp+2);
-      bool file_create_success = create_wrapper(file_name, initial_size);
+      create_wrapper(f);
       break;
     case SYS_REMOVE:
-      char *file_name=(char *)*((int *)f->esp+1);
-      bool file_remove_success = remove_wrapper(file_name);
+      remove_wrapper(f);
       break;
     case SYS_OPEN:
-      char *file_name=(char *)*((int *)f->esp+1);
-      int fd = open_wrapper(file_name);
+      open_wrapper(f);
       break;
     case SYS_FILESIZE:
-      int fd = (int) *(sys_call_type+1);
-      int file_size = filesize_wrapper(fd);
+      filesize_wrapper(f);
       break;
     case SYS_READ:
-      int fd = (int) *(sys_call_type+1);
-      void *buffer = (void *) *(sys_call_type+2);
-      unsigned size = (unsigned) *(sys_call_type+3);
-      int read_bytes=read_wrapper(fd,buffer,size);
+      read_wrapper(f);
       break;
     case SYS_WRITE:
-      int fd = (int) *(sys_call_type+1);
-      void *buffer=(void *) *(sys_call_type+2);
-      unsigned size=(unsigned) *(sys_call_type+3);
-      int written_bytes=write_wrapper(fd,buffer,size);
+      write_wrapper(f);
       break;
     case SYS_SEEK:
-      int fd = (int) *(sys_call_type+1);
-      unsigned position = (unsigned) *(sys_call_type+2);
-      seek_wrapper(fd,position);
+      seek_wrapper(f);
       break;
     case SYS_TELL:
-      int fd = (int) *(sys_call_type+1);
-      unsigned position = tell_wrapper(fd);
+      tell_wrapper(f);
       break;
     case SYS_CLOSE:
-      int fd = (int) *(sys_call_type+1);
-      close_wrapper(fd);
+      close_wrapper(f);
       break;
   }
-  //  TODO: ....continue rest of cases........ for remaining  syscalls
   thread_exit ();
 }
 
@@ -110,6 +99,8 @@ pid_t execute(char *file_name){
 }
 
 /*=============================================================================*/
+
+/* SYSCALLS IMPLEMENTATION: */
 
 /*WAIT*/
 /* Waits for a child process pid and retrieves the child's exit status. */
@@ -173,14 +164,21 @@ void exit(int status){
 /*=============================================================================*/
 
 /*Create a file without openning it with an initial size*/
-int create_wrapper(const char *file, unsigned initial_size){
-  return create(file, initial_size);
+void create_wrapper(struct intr_frame *f){
+  char *file_name=(char *)*((int *)f->esp+1);
+  validate_void_ptr(file_name);
+  int initial_size= (int) *((int *)f->esp+2);
+  validate_void_ptr(initial_size);
+  f->eax=create(file_name, initial_size);
 }
 
 bool create(const char *file,unsigned initial_size){
     /*try to create the file*/
-    /*Error cases=>file name is wrong && 
-    file already exists && internal memory allocation fails*/
+    /*Error cases=>
+    *1.)file name is wrong 
+    *2.)file already exists
+    *3.)internal memory allocation fails
+    */
   if(!validate_file_name(file)){
     return false;
   }
@@ -194,8 +192,10 @@ bool create(const char *file,unsigned initial_size){
 *Deletes the file called file.
 *Returns true if successful, false otherwise.
 */
-int remove_wrapper(const char *file){
-  return remove(file);
+void remove_wrapper(struct intr_frame *f){
+  char *file_name=(char *)*((int *)f->esp+1);
+  validate_void_ptr(file_name);
+  f->eax=remove(file_name);  
 }
 
 bool remove(const char *file){
@@ -213,14 +213,16 @@ bool remove(const char *file){
 *Returns a nonnegative integer handle called a "file descriptor" (fd),
 *or -1 if the file could not be opened.
 */
-int open_wrapper(const char *file){
-  if(!validate_file_name(file)){
-    return -1;
-  }
-  return open(file);
+void open_wrapper(struct intr_frame *f){
+  char *file_name=(char *)*((int *)f->esp+1);
+  validate_void_ptr(file_name);
+  f->eax=open(file_name);
 }
 
 int open(const char *file){
+  if(!validate_file_name(file)){
+    return -1;
+  }
   static unsigned long current_fd=2;//standard to file, 0=>stdin, 1=>stdout
   lock_acquire(&files_sync_lock);
   struct file *opened_file=filesys_open(file);
@@ -241,8 +243,10 @@ int open(const char *file){
 
 /*FILE SIZE*/
 /*Returns the size, in bytes, of the file open as fd.*/
-int filesize_wrapper(int fd){
-  return size(fd);
+void filesize_wrapper(struct intr_frame *f){
+  int fd=*((int *)f->esp+1);
+  validate_void_ptr(fd);
+  f->eax=filesize(fd);
 }
 
 int size(int fd){
@@ -262,8 +266,14 @@ int size(int fd){
 *or -1 if the file could not be read (due to a condition other than end of file).
 *Fd 0 reads from the keyboard using input_getc().
 */
-int read_wrapper(int fd, void *buffer, unsigned size){
-  return read(fd, buffer, size);
+void read_wrapper(struct intr_frame *f){
+  int fd=*((int *)f->esp+1);
+  validate_void_ptr(fd);
+  void *buffer=(void *)*((int *)f->esp+2);
+  validate_void_ptr(buffer);
+  unsigned size=(unsigned) *((int *)f->esp+3);
+  validate_void_ptr(size);
+  f->eax=read(fd, buffer, size);
 }
 
 int read(int fd,void * buffer, unsigned size){
@@ -300,12 +310,18 @@ int read(int fd,void * buffer, unsigned size){
 
 /*WRITE*/
 /*
-Writes size bytes from buffer to the open file fd. 
-Returns the number of bytes actually written,
-which may be less than size if some bytes could not be written.
+*Writes size bytes from buffer to the open file fd. 
+*Returns the number of bytes actually written,
+*which may be less than size if some bytes could not be written.
 */
-int write_wrapper(int fd, const void *buffer, unsigned size){
-  return write(fd, buffer, size);
+void write_wrapper(struct intr_frame *f){
+  int fd=*((int *)f->esp+1);
+  validate_void_ptr(fd);
+  void *buffer=(void *)*((int *)f->esp+2);
+  validate_void_ptr(buffer);
+  unsigned size=(unsigned) *((int *)f->esp+3);
+  validate_void_ptr(size);
+  f->eax=write(fd, buffer, size);
 }
 
 int write(int fd, const void *buffer, unsigned size){
@@ -343,7 +359,11 @@ int write(int fd, const void *buffer, unsigned size){
 *from the beginning of the file.
 *(Thus, a position of 0 is the file's start.)
 */
-void seek_wrapper(int fd,unsigned position){
+void seek_wrapper(struct intr_frame *f){
+  int fd=*((int *)f->esp+1);
+  validate_void_ptr(fd);
+  unsigned position=(unsigned) *((int *)f->esp+2);
+  validate_void_ptr(position);
   seek(fd,position);
 }
 void seek(int fd,unsigned position){
@@ -362,8 +382,10 @@ void seek(int fd,unsigned position){
 /*Returns the position of the next byte to be read or written in 
 open file fd, expressed in bytes from the beginning of the file.*/
 
-unsigned tell_wrapper(int fd){
-  return tell(fd); 
+void tell_wrapper(struct intr_frame *f){
+  int fd=*((int *)f->esp+1);
+  validate_void_ptr(fd);
+  f->eax=tell(fd);
 }
 
 unsigned tell(int fd){
@@ -382,8 +404,10 @@ unsigned tell(int fd){
 *Exiting or terminating a process implicitly closes all its open file descriptors,
 *as if by calling this function for each one.
 */
-void close_wrapper(int fd){
-  return close(fd);
+void close_wrapper(struct intr_frame *f){
+  int fd=*((int *)f->esp+1);
+  validate_void_ptr(fd);
+  close(fd);
 }
 void close(int fd){
   struct file *file=get_file(fd);
@@ -396,11 +420,12 @@ void close(int fd){
 /*=============================================================================*/
 
 /*HELPER FUNCTIONS*/
+
 /*GET FILE FROM THE FILE DESCRIPTOR*/
 struct file *get_file(int fd){
+
   struct thread* current_thread=thread_current();
   struct list_elem *e;
-
   for(e=list_begin(&current_thread->open_files);
       e!=list_end(&current_thread->open_files);
       e=list_next(e)){
@@ -413,7 +438,7 @@ struct file *get_file(int fd){
 }
 
 /*VALID FILE NAME*/
-/*Function is used to check if the file name is valid or not*/
+/*CHECK IF THE FILE NAME IS VALID*/
 bool validate_file_name(char *file){
   if(file==NULL) return false;
   
@@ -426,4 +451,12 @@ bool validate_file_name(char *file){
     }
   }
   return !invalid_character_found;
+}
+
+/*VALID VOID POINTER*/
+void validate_void_ptr(void *ptr){
+  uint32_t * check =lookup_page(thread_current()->pagedir, ptr, false);
+  if (ptr == NULL && !is_user_vaddr(ptr) && check == NULL ){
+    exit(-1); // error
+  }
 }
