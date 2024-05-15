@@ -44,14 +44,15 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   
-
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-
   sema_down(&thread_current()->parent_child_sync);
   if (!thread_current()->latest_child_creation) // unsuccessful attempt
   {
     tid = TID_ERROR;
+  }
+
+  if (tid == TID_ERROR){
+    palloc_free_page (fn_copy); 
+    exit(-1);
   }
   return tid;
 }
