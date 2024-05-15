@@ -11,7 +11,7 @@ void halt_wrapper(void);
 void halt(void);
 void exit_wrapper(struct intr_frame *f);
 void exit(int status);
-tid_t execute(char *file_name);
+pid_t execute(char *file_name);
 void execute_wrapper(struct intr_frame *f);
 
 #endif /* userprog/syscall.h */

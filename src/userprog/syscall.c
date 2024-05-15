@@ -165,10 +165,12 @@ void exit(int status){
 
 /*Create a file without openning it with an initial size*/
 void create_wrapper(struct intr_frame *f){
-  char *file_name=(char *)*((int *)f->esp+1);
-  validate_void_ptr(file_name);
+  char **ptr_filename=((char **)f->esp+1);
+  validate_void_ptr(ptr_filename);
+  char *file_name=(char *)*ptr_filename;
+  int *ptr_initial_size=((int *)f->esp+2);
+  validate_void_ptr(ptr_initial_size);
   int initial_size= (int) *((int *)f->esp+2);
-  validate_void_ptr(initial_size);
   f->eax=create(file_name, initial_size);
 }
 
@@ -267,12 +269,15 @@ int size(int fd){
 *Fd 0 reads from the keyboard using input_getc().
 */
 void read_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
-  void *buffer=(void *)*((int *)f->esp+2);
-  validate_void_ptr(buffer);
-  unsigned size=(unsigned) *((int *)f->esp+3);
-  validate_void_ptr(size);
+  int *ptr_fd=((int *)f->esp+1);
+  validate_void_ptr(ptr_fd);
+  int fd=*ptr_fd;
+  void *ptr_buffer=((int *)f->esp+2);
+  validate_void_ptr(ptr_buffer);
+  void *buffer=(void *)*ptr_buffer;
+  unsigned *ptr_size = ((int *)f->esp+3);
+  validate_void_ptr(ptr_size)
+  unsigned size=(unsigned) *ptr_size;
   f->eax=read(fd, buffer, size);
 }
 
@@ -292,6 +297,7 @@ int read(int fd,void * buffer, unsigned size){
   } 
   else if(fd==1){
     //Negative area 
+    return -1;
   }
   else{
     //Get the file from fd by searching in the open_files list of the current thread
