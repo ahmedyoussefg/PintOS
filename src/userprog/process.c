@@ -24,7 +24,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-
+void push_arguments( void **esp, int argc, char *argv[]);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -45,10 +45,12 @@ process_execute (const char *file_name)
   thread_current()->latest_child_creation=false; // reset 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  
+
   sema_down(&thread_current()->parent_child_sync);
+
   if (!thread_current()->latest_child_creation) // unsuccessful attempt
   {
+
     tid = TID_ERROR;
   }
 
@@ -64,6 +66,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  printf("start_process\n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -86,19 +89,20 @@ start_process (void *file_name_)
   if (!success) {
     if (parent != NULL)
       sema_up(&parent->parent_child_sync);
-    thread_exit ();
+      thread_exit ();
   }
   else
   {
     if (parent != NULL){
       // add the current (child) to list of child process in parent
       list_insert(list_tail(&parent->child_processes), &thread_current()->child_elem);
+
       sema_up(&parent->parent_child_sync);
       sema_down(&thread_current()->parent_child_sync);
+      printf("success: in  %d\n", success);
+
     }
   }
-
-
 
   
   /* Start the user process by simulating a return from an
@@ -159,6 +163,12 @@ process_wait (tid_t child_tid UNUSED)
   parent->waiting_on_which=-999;
   list_remove(&child->child_elem); // remove the child from parent's list of children
   return parent->child_status_after_wakeup;
+
+/*   while(true){
+    thread_yield();  
+    }
+
+    return -1; */
 }
 
 /* Free the current process's resources. */
@@ -203,6 +213,14 @@ process_exit (void)
       close(open->fd);
     }
   }
+  if (thread_current()->executable != NULL)
+  {
+    //file_allow_write(thread_current()->executable);
+    close(thread_current()->executable);
+    thread_current()->executable = NULL;
+  }
+  
+  
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -300,7 +318,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp, char *argv[],int const param_count);
+static bool setup_stack (void **esp , int argc, char *argv[]);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -315,25 +333,31 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
-  char *file_name_copy = malloc(strlen(file_name)+1); // file_name_copy = "echo x" because we need to copy the file_name to use strtok_r
-  strlcpy(file_name_copy, file_name, strlen(file_name)+1);
-  char *args[MAX_PARAMS];
-  int param_count = 0;
-  char *save_ptr;
-  char *token;
-  for (token = strtok_r(file_name_copy, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
-  {
-    args[param_count++] = token;
-  }
-  //free file_name_copy
-  free(file_name_copy);
-
+  // file_name_copy = "echo x" because we need to copy the file_name to use strtok_r
+ 
+  
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
   bool success = false;
   int i;
+    char *token, *save_ptr;
+  /* List of all command line arguments. 25 is a somewhat arbitrary limit,
+     informed by the 128 byte pintos command line limit. */
+  char *argv[25];
+  /* The number of arguments passed in on the command line (includes the program name),
+     so argc will always be at least 1. */
+  int argc = 0;
+
+  /* Tokenize the command line string with a " " (space) as a delimeter. */
+  for(token = strtok_r((char *)file_name, " ", &save_ptr); token != NULL;
+    token = strtok_r(NULL, " ", &save_ptr))
+  {
+    /* Add token to the array of command line arguments. */
+    argv[argc] = token;
+    argc++; /* Increment the number of args */
+  }
 
 
   /* Allocate and activate page directory. */
@@ -343,7 +367,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  printf("file_name: %s\n", argv[0]);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -423,8 +448,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, args, param_count))
+  if (!setup_stack (esp, argc, argv))
     goto done;
+
+
+  //push_arguments(esp,argc,argv); // push arguments to stack
+  //free();
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -433,8 +462,78 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  
+  if (success){
+    file_deny_write(file);
+
+      thread_current()->executable = file;
+  }
+  else  
+      close(file);
+
+
   return success;
+}
+
+void
+push_arguments( void **esp, int argc, char *argv[]){
+ void *stack_pointer = *esp;
+  int number_of_args = 0;
+  int all_args_size = 0;
+
+
+  char *stack_args = stack_pointer;
+
+  int align = (4 - (all_args_size % 4)) % 4;
+  if (align != 0)
+  {
+    stack_pointer -= align;
+    memset(stack_pointer, 0, align);
+  }
+
+  // Push NULL pointer at the end of args
+  stack_pointer -= sizeof(char *);
+  memset(stack_pointer, 0, sizeof(char *));
+
+uint32_t * arg_value_pointers[argc];
+
+  // Push addresses of args
+   for(int i = argc-1; i >= 0; i--)
+        {
+          /* Allocate enough space for the entire string (plus and extra byte for
+             '/0'). Copy the string to the stack, and add its reference to the array
+              of pointers. */
+          *esp = *esp - sizeof(char)*(strlen(argv[i])+1);
+          memcpy(*esp, argv[i], sizeof(char)*(strlen(argv[i])+1));
+          arg_value_pointers[i] = (uint32_t *)*esp;
+        }
+        /* Allocate space for & add the null sentinel. */
+        *esp = *esp - 4;
+        (*(int *)(*esp)) = 0;
+
+        /* Push onto the stack each char* in arg_value_pointers[] (each of which
+           references an argument that was previously added to the stack). */
+        *esp = *esp - 4;
+        for(int i = argc-1; i >= 0; i--)
+        {
+          (*(uint32_t **)(*esp)) = arg_value_pointers[i];
+          *esp = *esp - 4;
+        }
+
+        /* Push onto the stack a pointer to the pointer of the address of the
+           first argument in the list of arguments. */
+        (*(uintptr_t **)(*esp)) = *esp + 4;
+
+        /* Push onto the stack the number of program arguments. */
+        *esp = *esp - 4;
+        *(int *)(*esp) = argc;
+
+        /* Push onto the stack a fake return address, which completes stack initialization. */
+        *esp = *esp - 4;
+        (*(int *)(*esp)) = 0;
+
+    hex_dump((uintptr_t) (*esp - 64), *esp -64, 128, true);  
+
 }
 
 /* load() helpers. */
@@ -548,63 +647,65 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp, char *argv[],int const param_count) 
+setup_stack (void **esp, int argc, char *argv[])
 {
   uint8_t *kpage;
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
+  if (kpage != NULL)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success){
+      if (success)
+      {
+        
+        /* Offset PHYS_BASE as instructed. */
+        *esp = PHYS_BASE - 12;
+        /* A list of addresses to the values that are intially added to the stack.  */
+        uint32_t * arg_value_pointers[argc];
 
-           *esp = (char *)PHYS_BASE;
-            char **arg_pointers = malloc(param_count * sizeof(char *)); // Allocate space for the argument pointers
-
-            if (!arg_pointers) {
-                palloc_free_page(kpage);
-                return false; // Early exit if memory allocation fails
-            }
-
-            // Push arguments onto the stack in reverse order
-            for (int i = param_count - 1; i >= 1; i--) {
-                *esp = (char *)(*esp) - (strlen(argv[i]) + 1);
-                memcpy(*esp, argv[i], strlen(argv[i]) + 1);
-                arg_pointers[i] = *esp; // Save the address of the argument
-            }
-
-            // Word align the stack pointer using bitwise operations to clear the last two bits of the address 
-            *esp = (void *)(((uintptr_t)*esp) & ~0x3);
-
-            // Push a null sentinel
-            *esp = (char *)(*esp) - sizeof(char *);
-            *(char **)(*esp) = NULL;
-
-            // Push pointers to arguments
-            for (int i = param_count - 1; i >= 0; i--) {
-                *esp = (char *)(*esp) - sizeof(char *);
-                *(char **)(*esp) = arg_pointers[i];
-            }
-
-            // Push the address of argv[0]
-            char **argv0 = (char **)*esp;
-            *esp = (char *)(*esp) - sizeof(char **);
-            *(char ***)(*esp) = argv0;
-
-            // Push argc
-            *esp = (char *)(*esp) - sizeof(int);
-            *(int *)(*esp) = param_count;
-
-            // Push a fake return address
-            *esp = (char *)(*esp) - sizeof(void *);
-            *(void **)(*esp) = NULL;
-
-            free(arg_pointers); // Free the memory allocated for argument pointers
+        /* First add all of the command line arguments in descending order, including
+           the program name. */
+        for(int i = argc-1; i >= 0; i--)
+        {
+          /* Allocate enough space for the entire string (plus and extra byte for
+             '/0'). Copy the string to the stack, and add its reference to the array
+              of pointers. */
+          *esp = *esp - sizeof(char)*(strlen(argv[i])+1);
+          memcpy(*esp, argv[i], sizeof(char)*(strlen(argv[i])+1));
+          arg_value_pointers[i] = (uint32_t *)*esp;
         }
+        /* Allocate space for & add the null sentinel. */
+        *esp = *esp - 4;
+        (*(int *)(*esp)) = 0;
+
+        /* Push onto the stack each char* in arg_value_pointers[] (each of which
+           references an argument that was previously added to the stack). */
+        *esp = *esp - 4;
+        for(int i = argc-1; i >= 0; i--)
+        {
+          (*(uint32_t **)(*esp)) = arg_value_pointers[i];
+          *esp = *esp - 4;
+        }
+
+        /* Push onto the stack a pointer to the pointer of the address of the
+           first argument in the list of arguments. */
+        (*(uintptr_t **)(*esp)) = *esp + 4;
+
+        /* Push onto the stack the number of program arguments. */
+        *esp = *esp - 4;
+        *(int *)(*esp) = argc;
+
+        /* Push onto the stack a fake return address, which completes stack initialization. */
+        *esp = *esp - 4;
+        (*(int *)(*esp)) = 0;
+      }
       else
         palloc_free_page (kpage);
     }
+
+      hex_dump((uintptr_t) (*esp), *esp, 128, true);  
+
   return success;
 }
 

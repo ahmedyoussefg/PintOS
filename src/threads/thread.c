@@ -479,6 +479,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->child_status_after_wakeup=0;
   t->latest_child_creation=0;
   t->waiting_on_which=-999; // not used yet -999
+  t->executable=NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
