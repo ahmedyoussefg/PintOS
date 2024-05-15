@@ -19,6 +19,7 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "process.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -186,6 +187,18 @@ process_exit (void)
     }
   }
 
+  // close all open files in exit
+  struct list_elem *head_files= list_begin(&cur->open_files);
+  if (head_files != list_end (&cur->open_files)) 
+  {
+    struct list_elem *e;
+    struct open_file *open;
+    for (e = list_next (head); e != list_end (&cur->open_files); e = list_next (e))
+    {
+      open=list_entry(e,struct open_file, elem);
+      close(open->fd);
+    }
+  }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
