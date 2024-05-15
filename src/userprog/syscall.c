@@ -17,6 +17,8 @@
 #include "lib/user/syscall.h"
 #include "devices/input.h"
 #include "threads/malloc.h"
+#include "string.h"
+#include "stdlib.h"
 
 #define INVALID_POSITION -1
 
@@ -170,7 +172,7 @@ void create_wrapper(struct intr_frame *f){
   char *file_name=(char *)*ptr_filename;
   int *ptr_initial_size=((int *)f->esp+2);
   validate_void_ptr(ptr_initial_size);
-  int initial_size= (int) *((int *)f->esp+2);
+  int initial_size= *ptr_initial_size;
   f->eax=create(file_name, initial_size);
 }
 
@@ -195,8 +197,9 @@ bool create(const char *file,unsigned initial_size){
 *Returns true if successful, false otherwise.
 */
 void remove_wrapper(struct intr_frame *f){
-  char *file_name=(char *)*((int *)f->esp+1);
-  validate_void_ptr(file_name);
+  char **ptr_file_name=((char **)f->esp+1);
+  validate_void_ptr(ptr_file_name);
+  char *file_name=(char *)*ptr_file_name;
   f->eax=remove(file_name);  
 }
 
@@ -216,8 +219,9 @@ bool remove(const char *file){
 *or -1 if the file could not be opened.
 */
 void open_wrapper(struct intr_frame *f){
-  char *file_name=(char *)*((int *)f->esp+1);
-  validate_void_ptr(file_name);
+  char *ptr_file_name=((char **)f->esp+1);
+  validate_void_ptr(ptr_file_name);
+  char *file_name=(char *)*ptr_file_name;
   f->eax=open(file_name);
 }
 
@@ -246,9 +250,10 @@ int open(const char *file){
 /*FILE SIZE*/
 /*Returns the size, in bytes, of the file open as fd.*/
 void filesize_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
-  f->eax=filesize(fd);
+  int *ptr_fd=((int *)f->esp+1);
+  validate_void_ptr(ptr_fd);
+  int fd=*ptr_fd;
+  f->eax=size(fd);
 }
 
 int size(int fd){
@@ -272,12 +277,15 @@ void read_wrapper(struct intr_frame *f){
   int *ptr_fd=((int *)f->esp+1);
   validate_void_ptr(ptr_fd);
   int fd=*ptr_fd;
-  void *ptr_buffer=((int *)f->esp+2);
+
+  //make pointer to buffer
+  void *ptr_buffer=(void *)*((int *)f->esp+2);
   validate_void_ptr(ptr_buffer);
   void *buffer=(void *)*ptr_buffer;
-  unsigned *ptr_size = ((int *)f->esp+3);
-  validate_void_ptr(ptr_size)
-  unsigned size=(unsigned) *ptr_size;
+
+  unsigned *ptr_size = ((unsigned *)f->esp+3);
+  validate_void_ptr(ptr_size);
+  unsigned size= *ptr_size;
   f->eax=read(fd, buffer, size);
 }
 
@@ -308,7 +316,7 @@ int read(int fd,void * buffer, unsigned size){
     lock_acquire(&files_sync_lock);
     int bytes_read=file_read(file,buffer,size);
     lock_release(&files_sync_lock);
-    return size;
+    return bytes_read;
   }       
 }
 
@@ -321,12 +329,20 @@ int read(int fd,void * buffer, unsigned size){
 *which may be less than size if some bytes could not be written.
 */
 void write_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
-  void *buffer=(void *)*((int *)f->esp+2);
-  validate_void_ptr(buffer);
-  unsigned size=(unsigned) *((int *)f->esp+3);
-  validate_void_ptr(size);
+  
+  int *ptr_fd=((int *)f->esp+1);
+  validate_void_ptr(ptr_fd);
+  int fd=*ptr_fd;
+
+  
+  void *ptr_buffer=(void *)*((int *)f->esp+2);
+  validate_void_ptr(ptr_buffer);
+  void *buffer=(void *)*ptr_buffer;
+
+  unsigned *ptr_size = ((int *)f->esp+3);
+  validate_void_ptr(ptr_size);
+  unsigned size=(unsigned) *ptr_size;
+  
   f->eax=write(fd, buffer, size);
 }
 
@@ -366,10 +382,14 @@ int write(int fd, const void *buffer, unsigned size){
 *(Thus, a position of 0 is the file's start.)
 */
 void seek_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
-  unsigned position=(unsigned) *((int *)f->esp+2);
-  validate_void_ptr(position);
+  int *ptr_fd=((int *)f->esp+1);
+  validate_void_ptr(ptr_fd);
+  int fd=*ptr_fd;
+
+  unsigned *ptr_position = ((int *)f->esp+2);
+  validate_void_ptr(ptr_position);
+  unsigned position=(unsigned) *ptr_position;
+
   seek(fd,position);
 }
 void seek(int fd,unsigned position){
@@ -389,8 +409,9 @@ void seek(int fd,unsigned position){
 open file fd, expressed in bytes from the beginning of the file.*/
 
 void tell_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
+  int *ptr_fd=((int *)f->esp+1);
+  validate_void_ptr(ptr_fd);
+  int fd=*ptr_fd;
   f->eax=tell(fd);
 }
 
@@ -411,8 +432,9 @@ unsigned tell(int fd){
 *as if by calling this function for each one.
 */
 void close_wrapper(struct intr_frame *f){
-  int fd=*((int *)f->esp+1);
-  validate_void_ptr(fd);
+  int *ptr_fd=((int *)f->esp+1);
+  validate_void_ptr(ptr_fd);
+  int fd=*ptr_fd;
   close(fd);
 }
 void close(int fd){
