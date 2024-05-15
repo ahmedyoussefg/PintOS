@@ -248,7 +248,7 @@ int open(const char *file){
 void filesize_wrapper(struct intr_frame *f){
   int fd=*((int *)f->esp+1);
   validate_void_ptr(fd);
-  f->eax=filesize(fd);
+  f->eax=size(fd);
 }
 
 int size(int fd){
@@ -274,9 +274,9 @@ void read_wrapper(struct intr_frame *f){
   int fd=*ptr_fd;
   void *ptr_buffer=((int *)f->esp+2);
   validate_void_ptr(ptr_buffer);
-  void *buffer=(void *)*ptr_buffer;
+  void *buffer = (void *)ptr_buffer;
   unsigned *ptr_size = ((int *)f->esp+3);
-  validate_void_ptr(ptr_size)
+  validate_void_ptr(ptr_size);
   unsigned size=(unsigned) *ptr_size;
   f->eax=read(fd, buffer, size);
 }
@@ -445,7 +445,7 @@ struct file *get_file(int fd){
 
 /*VALID FILE NAME*/
 /*CHECK IF THE FILE NAME IS VALID*/
-bool validate_file_name(char *file){
+bool validate_file_name(const char *file){
   if(file==NULL) return false;
   
   char bad_chars[] = "!%@^*~|";
