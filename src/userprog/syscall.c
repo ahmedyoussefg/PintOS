@@ -84,7 +84,6 @@ syscall_handler (struct intr_frame *f)
       close_wrapper(f);
       break;
   }
-  thread_exit ();
 }
 
 // OUR syscalls implementation:
