@@ -8,11 +8,19 @@
 #include "threads/synch.h"
 
 #define INVALID_POSITION -1
+#include "threads/vaddr.h"
+#include "pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 static struct lock files_sync_lock;
 
 
+void validate_void_ptr(void *ptr){
+  uint32_t * check =lookup_page(thread_current()->pagedir, ptr, false);
+  if (ptr == NULL && !is_user_vaddr(ptr) && check == NULL ){
+    exit(-1); // error
+  }
+}
 void
 syscall_init (void) 
 {
@@ -23,7 +31,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   printf ("system call!\n");
-  /*Go3: this was just for trial, remove till before thread_exit(); line*/
+  validate_void_ptr(f->esp);  
   int *sys_call_type= (int *)f->esp;//stack pointer
 
   /* Inside each syscall wrapper : call validate_void_ptr: check if ptr not null, 
@@ -31,13 +39,15 @@ syscall_handler (struct intr_frame *f)
   switch (*sys_call_type){
     case SYS_WAIT:
       // handle wait
-      pid_t pid = (pid_t) *(sys_call_type+1); 
-      int child_exit_status = wait_wrapper(pid);
+      wait_wrapper(f);
       break;
     case SYS_EXIT:
       // handle exit
-      int status = (int) *(sys_call_type+1); 
-      exit(status);
+      exit_wrapper(f);
+      break;
+    case SYS_EXEC:
+      // handle exec
+      excecute_wrapper(f);
       break;
     case SYS_CREATE:
       char *file_name=(char *)*((int *)f->esp+1);
@@ -86,17 +96,27 @@ syscall_handler (struct intr_frame *f)
   thread_exit ();
 }
 
+void excecute_wrapper(struct intr_frame *f){
+  char ** ptr=(char**)f->esp+1;
+  validate_void_ptr(ptr);
+  char *file_name = (char *) *ptr;
+  f->eax=process_execute(file_name);   
+}
+
 /*=============================================================================*/
 
 // OUR syscalls implementation:
 /*WAIT*/
 /* Waits for a child process pid and retrieves the child's exit status. */
-int wait_wrapper (pid_t pid) {
-  return wait(pid);
+void wait_wrapper (struct intr_frame *f) {
+  pid_t * ptr=(pid_t*)f->esp+1;
+  validate_void_ptr(ptr);
+  pid_t pid = (pid_t) *ptr;
+  f->eax=wait(pid);   // return value
 }
 
-int wait(pid_t pid){
-  return process_wait((tid_t) pid); 
+int wait(pid_t tid){
+  return process_wait((pid_t) tid); 
 }
 
 /*=============================================================================*/
@@ -112,6 +132,10 @@ void halt(void){
   shutdown_power_off();
 }
 
+void exit_wrapper(struct intr_frame *f) {
+  int * ptr=(int*)f->esp+1;
+  validate_void_ptr(ptr);
+  int status = (int) *ptr; 
 /*=============================================================================*/
 
 /* Exit */
@@ -124,28 +148,17 @@ void exit(int status){
   // make sure no leaks
   // wake up all children (if exist)
   struct thread* current= thread_current();
+  // process_exit(); (RELEASE ALL RESOURCES-- called inside process_exit())
+  
   process_exit();
 
   // TODO: now iterate over each element in open_file and call close(e->fd)
+
+  // if the parent is waiting for thread, give the parent the status of child exit
   if (current->parent_process != NULL){
     struct thread * parent= current->parent_process;
     if(parent->waiting_on_which==current->tid){
       parent->child_status_after_wakeup=status;
-      semaup(&parent->wait_child);
-    }
-    list_remove(&current->child_elem);
-  }
-
-  // waking up all childrens
-  struct list_elem *head= list_begin(&current->child_processes);
-  if (head != list_end (&current->child_processes)) 
-  {
-    struct list_elem *e;
-    struct thread *t;
-    for (e = list_next (head); e != list_end (&current->child_processes); e = list_next (e))
-    {
-      t=list_entry(e,struct thread, child_elem);
-      sema_up(&t->parent_child_sync);
     }
   }
 

@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "threads/thread.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -42,16 +43,16 @@ process_execute (const char *file_name)
   thread_current()->latest_child_creation=false; // reset 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-
-  sema_down(&thread_current()->parent_child_sync);
-
-  if (thread_current()->latest_child_creation) // unsuccessful attempt
-  {
-    tid = TID_ERROR;
-  }
+  
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  sema_down(&thread_current()->parent_child_sync);
+  if (!thread_current()->latest_child_creation) // unsuccessful attempt
+  {
+    tid = TID_ERROR;
+  }
   return tid;
 }
 
@@ -163,6 +164,27 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  if (cur->parent_process != NULL){
+    struct thread * parent= cur->parent_process;
+    if(parent->waiting_on_which==cur->tid){ // if the parent is waiting on this
+      sema_up(&parent->wait_child);         // sema up the parent
+    }
+    list_remove(&cur->child_elem);      // remove the current thread from parent's children
+  }
+
+  // waking up all childrens
+  struct list_elem *head= list_begin(&cur->child_processes);
+  if (head != list_end (&cur->child_processes)) 
+  {
+    struct list_elem *e;
+    struct thread *t;
+    for (e = list_next (head); e != list_end (&cur->child_processes); e = list_next (e))
+    {
+      t=list_entry(e,struct thread, child_elem);
+      sema_up(&t->parent_child_sync);
+    }
+  }
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -260,7 +282,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char *argv[],int const param_count);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -528,7 +550,7 @@ setup_stack (void **esp, char *argv[],int const param_count)
             }
 
             // Push arguments onto the stack in reverse order
-            for (int i = param_count - 1; i >= 0; i--) {
+            for (int i = param_count - 1; i >= 1; i--) {
                 *esp = (char *)(*esp) - (strlen(argv[i]) + 1);
                 memcpy(*esp, argv[i], strlen(argv[i]) + 1);
                 arg_pointers[i] = *esp; // Save the address of the argument
