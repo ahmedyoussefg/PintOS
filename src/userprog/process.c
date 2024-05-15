@@ -171,6 +171,9 @@ process_exit (void)
     struct thread * parent= cur->parent_process;
     if(parent->waiting_on_which==cur->tid){ // if the parent is waiting on this
       sema_up(&parent->wait_child);         // sema up the parent
+    } // the child will be removed when parent returns from blocking state, in wait function
+    else { 
+      list_remove(&chr->chlid_elem); // remove the child from parent's list of children
     }
   }
 
