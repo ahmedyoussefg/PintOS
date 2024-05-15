@@ -216,8 +216,8 @@ process_exit (void)
   if (thread_current()->executable != NULL)
   {
     //file_allow_write(thread_current()->executable);
-    close(thread_current()->executable);
-    thread_current()->executable = NULL;
+    file_close(thread_current()->executable);
+    cur->executable = NULL;
   }
   
   
@@ -467,9 +467,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
     file_deny_write(file);
 
       thread_current()->executable = file;
+      // thread_current()->filename=file_name;
+      strlcpy (thread_current()->filename, file_name, sizeof t->filename);
+
   }
   else  
-      close(file);
+      file_close(file);
 
 
   return success;

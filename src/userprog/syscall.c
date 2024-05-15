@@ -166,7 +166,7 @@ void exit(int status){
       parent->child_status_after_wakeup=status;
     }
   }
-
+  printf("%s: exit(%d)\n", current->filename, status);
   // call exit_thread();
   thread_exit();  
 }
@@ -473,7 +473,7 @@ struct file *get_file(int fd){
 /*VALID VOID POINTER*/
 void validate_void_ptr(void *ptr){
   uint32_t * check =lookup_page(thread_current()->pagedir, ptr, false);
-  if (ptr == NULL && !is_user_vaddr(ptr) && check == NULL ){
+  if (ptr == NULL || !is_user_vaddr(ptr) || check == NULL ){
     exit(-1); // error
   }
 }

@@ -108,6 +108,7 @@ struct thread
    struct semaphore parent_child_sync; // synchronization (when parent sleeps)
    struct list open_files; /* list of open files in the thread*/
    struct file *executable; /* executable file of the thread*/
+   char filename[128];
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
