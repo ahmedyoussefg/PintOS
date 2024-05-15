@@ -156,6 +156,7 @@ process_wait (tid_t child_tid UNUSED)
   sema_down(&child->parent_process->wait_child);
   // reset waiting on which
   parent->waiting_on_which=-999;
+  list_remove(&child->chlid_elem); // remove the child from parent's list of children
   return parent->child_status_after_wakeup;
 }
 
@@ -171,7 +172,6 @@ process_exit (void)
     if(parent->waiting_on_which==cur->tid){ // if the parent is waiting on this
       sema_up(&parent->wait_child);         // sema up the parent
     }
-    list_remove(&cur->child_elem);      // remove the current thread from parent's children
   }
 
   // waking up all childrens
