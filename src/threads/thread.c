@@ -289,6 +289,8 @@ void
 thread_exit (void)
 {
   ASSERT (!intr_context ());
+  /* Tell my parent thread to stop waiting. */
+  sema_up(&thread_current ()->being_waited_on);
 
 #ifdef USERPROG
   process_exit ();
@@ -298,7 +300,7 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current()->allelem);
+  list_remove (&thread_current ()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -470,47 +472,24 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  // Phase 2
+  /* Init the threads list of processes it creates. */
+  list_init(&t->child_process_list);
+
+  /* Init the list of file descriptors for this thread, which holds all of the files that this thread has open. */
+  list_init(&t->file_descriptors);
+
+  /* Initalize the next available file descriptor to 2 (0 and 1 are reserved
+     for STDIN and STDOUT, respectively). */
+  t->cur_fd = 2;
+
+  /* Init the semaphore in charge of putting a parent thread to sleep. */
+  sema_init(&t->being_waited_on, 0);
+
+  /* We assume the exit status is bad, unless exit() is properly
+     called (and it is assigned otherwise). */
   t->exit_status = -1;
-  t->fid_generator = 2;
-  list_init (&t->children);
-  lock_init (&t->parent_waiting_lock);
-  cond_init (&t->parent_waiting_condition);
-  sema_init (&t->exec_sema, 0);
-  list_init (&t->files);
-  // End Phase 2
 
   list_push_back (&all_list, &t->allelem);
-}
-
-struct file_descriptor *
-get_file_descriptor (struct thread *t, int fid)
-{
-  // loop though list
-  struct list_elem *e = list_begin (&t->files);
-  while (e != list_end (&t->files))
-  {
-    struct file_descriptor *file_des = list_entry (e, struct file_descriptor, thread_elem);
-    if (file_des->fid == fid)
-      return file_des;
-    e = list_next(e);
-  }
-  return NULL;
-}
-
-struct thread *
-get_thread (tid_t id)
-{
-  // loop though list
-  struct list_elem *e = list_begin (&all_list);
-  while (e != list_end (&all_list))
-  {
-    struct thread *t = list_entry (e, struct thread, allelem);
-    if (t->tid == id)
-      return t;
-    e = list_next(e);
-  }
-  return NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

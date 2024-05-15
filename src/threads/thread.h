@@ -4,10 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "filesys/file.h"
-#include "threads/synch.h"
-
-typedef int tid_t;
+#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -17,22 +14,6 @@ enum thread_status
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING        /* About to be destroyed. */
   };
-
-struct child_info
-{
-  tid_t tid;
-  int exit_status; // if not terminated by kernel
-  bool is_loaded;  // to indicate if child has returned from load function or not.
-  struct list_elem child_elem;
-};
-
-struct file_descriptor
-{
-  int fid;
-  struct file* file;
-  // struct list_elem elem;
-  struct list_elem thread_elem;
-};
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
@@ -115,22 +96,14 @@ struct thread
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
+    uint32_t *pagedir;                 /* Page directory. */
+    struct list child_process_list;    /* List containing each child process. */
+    int exit_status;                   /* Stores the status upon exit */
+    struct list_elem child_elem;       /* Used to keep track of the element in the child list. */
+    struct semaphore being_waited_on;  /* Used to put a parent thread to sleep when it needs to wait for a child. */
+    struct list file_descriptors;      /* List of file descriptors belonging to this therad. */
+    int cur_fd;                        /* An integer available file descriptor. */
 #endif
-
-    tid_t parent_id;                    /* parent thread id */
-    struct list children;               /* All children that haven't been waited for.
-                                        (After a successful wait, child is removed from list) */
-    int exit_status;
-    struct lock parent_waiting_lock;
-    struct condition parent_waiting_condition;
-
-    int fid_generator;                  /* value used to generate a new fd integer - initialized to 2 */
-
-    struct list files;                  /* List of opened files */
-    struct file* executing_file;        /* Pointer to the process file */
-
-    struct semaphore exec_sema;         /* Used to synchronize between child and parent threads */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
@@ -140,9 +113,6 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-
-struct thread *get_thread (tid_t id);
-struct file_descriptor *get_file_descriptor (struct thread *t, int fid);
 
 void thread_init (void);
 void thread_start (void);
