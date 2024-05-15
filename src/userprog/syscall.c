@@ -96,16 +96,21 @@ syscall_handler (struct intr_frame *f)
   thread_exit ();
 }
 
+// OUR syscalls implementation:
+/* Execute */
 void execute_wrapper(struct intr_frame *f){
   char ** ptr=(char**)f->esp+1;
   validate_void_ptr(ptr);
   char *file_name = (char *) *ptr;
-  f->eax=process_execute(file_name);   
+  f->eax=execute(file_name);   
+}
+
+pid_t execute(char *file_name){
+  return process_execute(file_name);
 }
 
 /*=============================================================================*/
 
-// OUR syscalls implementation:
 /*WAIT*/
 /* Waits for a child process pid and retrieves the child's exit status. */
 void wait_wrapper (struct intr_frame *f) {
@@ -132,14 +137,13 @@ void halt(void){
   shutdown_power_off();
 }
 
+/*=============================================================================*/
+
+/* Exit */
 void exit_wrapper(struct intr_frame *f) {
   int * ptr=(int*)f->esp+1;
   validate_void_ptr(ptr);
   int status = (int) *ptr; 
-/*=============================================================================*/
-
-/* Exit */
-void exit_wrapper(int status) {
   exit(status);
 }
 
