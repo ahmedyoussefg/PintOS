@@ -49,7 +49,7 @@ syscall_handler (struct intr_frame *f)
       exit_wrapper(f);
       break;
     case SYS_EXEC:
-      excecute_wrapper(f);
+      execute_wrapper(f);
       break;
     case SYS_HALT:
       halt_wrapper();
@@ -85,7 +85,7 @@ syscall_handler (struct intr_frame *f)
   thread_exit ();
 }
 
-void excecute_wrapper(struct intr_frame *f){
+void execute_wrapper(struct intr_frame *f){
   char ** ptr=(char**)f->esp+1;
   validate_void_ptr(ptr);
   char *file_name = (char *) *ptr;
