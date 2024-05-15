@@ -19,6 +19,7 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "process.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -155,6 +156,7 @@ process_wait (tid_t child_tid UNUSED)
   sema_down(&child->parent_process->wait_child);
   // reset waiting on which
   parent->waiting_on_which=-999;
+  list_remove(&child->chlid_elem); // remove the child from parent's list of children
   return parent->child_status_after_wakeup;
 }
 
@@ -169,8 +171,10 @@ process_exit (void)
     struct thread * parent= cur->parent_process;
     if(parent->waiting_on_which==cur->tid){ // if the parent is waiting on this
       sema_up(&parent->wait_child);         // sema up the parent
+    } // the child will be removed when parent returns from blocking state, in wait function
+    else { 
+      list_remove(&chr->chlid_elem); // remove the child from parent's list of children
     }
-    list_remove(&cur->child_elem);      // remove the current thread from parent's children
   }
 
   // waking up all childrens
@@ -186,6 +190,18 @@ process_exit (void)
     }
   }
 
+  // close all open files in exit
+  struct list_elem *head_files= list_begin(&cur->open_files);
+  if (head_files != list_end (&cur->open_files)) 
+  {
+    struct list_elem *e;
+    struct open_file *open;
+    for (e = list_next (head); e != list_end (&cur->open_files); e = list_next (e))
+    {
+      open=list_entry(e,struct open_file, elem);
+      close(open->fd);
+    }
+  }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

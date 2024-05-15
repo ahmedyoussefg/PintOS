@@ -281,11 +281,10 @@ void read_wrapper(struct intr_frame *f){
   //make pointer to buffer
   void *ptr_buffer=(void *)*((int *)f->esp+2);
   validate_void_ptr(ptr_buffer);
-  void *buffer=(void *)*ptr_buffer;
-
-  unsigned *ptr_size = ((unsigned *)f->esp+3);
+  void *buffer = (void *)ptr_buffer;
+  unsigned *ptr_size = ((int *)f->esp+3);
   validate_void_ptr(ptr_size);
-  unsigned size= *ptr_size;
+  unsigned size=(unsigned) *ptr_size;
   f->eax=read(fd, buffer, size);
 }
 
@@ -467,7 +466,7 @@ struct file *get_file(int fd){
 
 /*VALID FILE NAME*/
 /*CHECK IF THE FILE NAME IS VALID*/
-bool validate_file_name(char *file){
+bool validate_file_name(const char *file){
   if(file==NULL) return false;
   
   char bad_chars[] = "!%@^*~|";
