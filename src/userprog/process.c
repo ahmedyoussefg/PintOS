@@ -468,7 +468,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
       thread_current()->executable = file;
       // thread_current()->filename=file_name;
-      strlcpy (thread_current()->filename, file_name, sizeof t->filename);
+      strlcpy (thread_current()->filename, argv[0], sizeof t->filename);
 
   }
   else  
