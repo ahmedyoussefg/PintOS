@@ -83,6 +83,17 @@ typedef int tid_t;
    blocked state is on a semaphore wait list. */
 struct thread
   {
+    struct list open_files;
+    struct list child_processes;
+    struct thread *parent;
+    bool child_creation_success;    //Check if the child is created or not
+    int child_status;
+    tid_t waiting_on_which; // which thread is it waiting on ? (to check if the parent is waiting on me)
+                           //When child exits ==> check parent.waiting_on_which, if it's waiting on the child
+                           //Then set the child_status to the status of the child and sema_up the parent.wait_child
+    struct semaphore wait_for_child;
+    struct semaphore parent_child_sync;
+    int fd_last;
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
@@ -110,6 +121,18 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct open_file{
+  struct file *file;       //pointer to the opened file       
+  int fd;                  //when we need to do system call, we send fd
+                           //when we need to call the filesystem, we send file(pointer)
+  struct list_elem elem;
+};
+
+struct child_process{
+   tid_t tid;
+   
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

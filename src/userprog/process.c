@@ -42,7 +42,9 @@ process_execute (const char *file_name)
   thread_current()->latest_child_creation=false; // reset 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+
   sema_down(&thread_current()->parent_child_sync);
+
   if (thread_current()->latest_child_creation) // unsuccessful attempt
   {
     tid = TID_ERROR;
@@ -67,10 +69,14 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
   success = load (file_name, &if_.eip, &if_.esp);
   struct thread * parent=thread_current()->parent_process;
+
   if (parent != NULL) // if he has parent
     parent->latest_child_creation=success; // set success state
+
+  
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) {
@@ -87,6 +93,10 @@ start_process (void *file_name_)
       sema_down(&thread_current()->parent_child_sync);
     }
   }
+
+
+
+  
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
