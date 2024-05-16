@@ -446,7 +446,9 @@ void close(int fd){
   if(file==NULL){
     return;
   }
+  lock_acquire(&files_sync_lock);
   file_close(file);
+  lock_release(&files_sync_lock);
 }
 
 /*=============================================================================*/
