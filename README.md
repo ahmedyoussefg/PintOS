@@ -46,3 +46,13 @@ Here's a list of sessions I made (in Arabic) for Alexandria University, explaini
 
 1. [Phase 1 Requirements](https://youtu.be/RLx_0nnEjaM)
 2. [Phase 2 Requirements](https://youtu.be/bFUmvVgmbOs)
+
+---
+
+## Contributors
+`src-phase-one` and `src-phase-two` modifications from the original `src` is done by CSED26 Students:
+- [Ahmed Youssef](https://github.com/ahmedyoussefg)
+- [Abdallah Adel](https://github.com/abdallahadel667)
+- [Ebrahim Alaa](https://github.com/ebrahimAlaaeldin)
+- [Aly Eldin Mohammed](https://github.com/Aly-El-Din)
+- [Mohamad Sherif](https://github.com/shifeau)
