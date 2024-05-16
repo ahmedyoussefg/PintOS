@@ -453,10 +453,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       strlcpy (thread_current()->filename, argv[0], sizeof t->filename);
 
   }
-  else  {
+  else  
       file_close(file);
-      exit(-1);
-  }
+
 
   return success;
 }
