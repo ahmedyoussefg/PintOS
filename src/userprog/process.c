@@ -190,9 +190,10 @@ process_exit (void)
   }
 
   // close all open files in exit
-  for (e = list_begin(&cur->open_files); e != list_end(&cur->open_files); e = list_next(e)) {
-    struct open_file *open = list_entry(e, struct open_file, elem);
-    close(open->fd);
+  while (!list_empty(&cur->open_files))
+  {
+    struct open_file *open = list_entry(list_pop_front(&cur->open_files), struct open_file, elem);
+    file_close(open->file);
   }
 
   if (thread_current()->executable != NULL)
@@ -452,9 +453,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
       strlcpy (thread_current()->filename, argv[0], sizeof t->filename);
 
   }
-  else  
+  else  {
       file_close(file);
-
+      exit(-1);
+  }
 
   return success;
 }

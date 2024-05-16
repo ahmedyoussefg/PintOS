@@ -232,7 +232,6 @@ int open(const char *file){
   }
 
   struct open_file *file_to_open=(struct open_file *)malloc(sizeof(struct open_file));
-  int temp_fd=current_fd;
 
   file_to_open->file=opened_file;
   file_to_open->fd=current_fd;
