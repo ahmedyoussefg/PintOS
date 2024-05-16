@@ -55,7 +55,6 @@ process_execute (const char *file_name)
 
   if (tid == TID_ERROR){
     palloc_free_page (fn_copy); 
-    exit(-1);
   }
   return tid;
 }
@@ -174,9 +173,11 @@ process_exit (void)
     struct thread * parent= cur->parent_process;
     if(parent->waiting_on_which==cur->tid){ // if the parent is waiting on this
       sema_up(&parent->wait_child);         // sema up the parent
-    } // the child will be removed when parent returns from blocking state, in wait function
+    // the child is removed before the parent go into blocking state, in wait function
+    } 
     else { 
-      list_remove(&cur->child_elem); // remove the child from parent's list of children
+      if (cur->parent_process->latest_child_creation)
+        list_remove(&cur->child_elem); // remove the child from parent's list of children
     }
   }
 
@@ -196,7 +197,7 @@ process_exit (void)
 
   if (thread_current()->executable != NULL)
   {
-    //file_allow_write(thread_current()->executable);
+    file_allow_write(thread_current()->executable);
     file_close(thread_current()->executable);
     cur->executable = NULL;
   }
