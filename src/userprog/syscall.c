@@ -236,13 +236,14 @@ int open(const char *file){
 
   file_to_open->file=opened_file;
   file_to_open->fd=current_fd;
-  lock_acquire(&files_sync_lock);
-  current_fd++;
-  lock_release(&files_sync_lock);
   struct list_elem *element=&file_to_open->elem;
   list_push_back(&thread_current()->open_files,element);
 
-  return temp_fd;
+  lock_acquire(&files_sync_lock);
+  current_fd++;
+  lock_release(&files_sync_lock);
+
+  return file_to_open->fd;
 }
 
 /*=============================================================================*/

@@ -182,31 +182,19 @@ process_exit (void)
     }
   }
 
-  // waking up all childrens
-  struct list_elem *head= list_begin(&cur->child_processes);
-  if (head != list_end (&cur->child_processes)) 
-  {
-    struct list_elem *e;
-    struct thread *t;
-    for (e = list_next (head); e != list_end (&cur->child_processes); e = list_next (e))
-    {
-      t=list_entry(e,struct thread, child_elem);
-      sema_up(&t->parent_child_sync);
-    }
+  // waking up all children
+  struct list_elem *e;
+  for (e = list_begin(&cur->child_processes); e != list_end(&cur->child_processes); e = list_next(e)) {
+    struct thread *t = list_entry(e, struct thread, child_elem);
+    sema_up(&t->parent_child_sync);
   }
 
   // close all open files in exit
-  struct list_elem *head_files= list_begin(&cur->open_files);
-  if (head_files != list_end (&cur->open_files)) 
-  {
-    struct list_elem *e;
-    struct open_file *open;
-    for (e = list_next (head); e != list_end (&cur->open_files); e = list_next (e))
-    {
-      open=list_entry(e,struct open_file, elem);
-      close(open->fd);
-    }
+  for (e = list_begin(&cur->open_files); e != list_end(&cur->open_files); e = list_next(e)) {
+    struct open_file *open = list_entry(e, struct open_file, elem);
+    close(open->fd);
   }
+
   if (thread_current()->executable != NULL)
   {
     //file_allow_write(thread_current()->executable);
