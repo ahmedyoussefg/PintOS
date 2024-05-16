@@ -31,16 +31,13 @@ static struct lock files_sync_lock;
 void
 syscall_init (void) 
 {
-  printf("syscall_init: start");
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&files_sync_lock);
-  printf("syscall_init: done\n");
 }
 
 static void
 syscall_handler (struct intr_frame *f) 
 {
-      printf("syscall_handler: start\n");
 
   validate_void_ptr(f->esp);  
   int *sys_call_type= (int *)f->esp;//stack pointer
@@ -93,18 +90,14 @@ syscall_handler (struct intr_frame *f)
 // OUR syscalls implementation:
 /* Execute */
 void execute_wrapper(struct intr_frame *f){
-  printf("execute_wrapper: start");
   int *ptr=(int *)f->esp+1;
   validate_void_ptr(ptr);
   char *file_name = (char *) *ptr;
   f->eax=execute(file_name); 
-  printf("execute_wrapper: done");
 
-  //hex_dump(f->esp, f->esp, 128, true);  
 }
 
 pid_t execute(char *file_name){
-  printf("execute: start");
   return process_execute(file_name);
 }
 
@@ -229,25 +222,21 @@ void open_wrapper(struct intr_frame *f){
 int open(const char *file){
   static unsigned long current_fd=2;//standard to file, 0=>stdin, 1=>stdout
 
-  printf("open: start\n");
   lock_acquire(&files_sync_lock);
-  printf("open: lock acquired\n");
   struct file *opened_file=filesys_open(file);
-  printf("open: file opened\n");
   lock_release(&files_sync_lock);
-  printf("open: lock released\n");
   if(opened_file==NULL){
     return -1;
   }
-  printf("open: file not null\n");
+
   struct open_file *thread_files=(struct open_file *)malloc(sizeof(struct open_file));
-  printf("open: memory allocated\n");
+
   thread_files->file=opened_file;
   int temp_fd=current_fd;
   thread_files->fd=current_fd;
   current_fd++;
   list_push_back(&thread_current()->open_files,&thread_files->elem);
-  printf("open: file pushed to list\n");
+
   return temp_fd;
 }
 
