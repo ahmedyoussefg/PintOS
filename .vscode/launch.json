@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/abdallah/Documents/PintOS/src/userprog",
-      "program": "/home/abdallah/Documents/PintOS/src/userprog/build/Debug/outDebug",
+      "cwd": "/home/abdallah/Documents/PintOS/src/threads",
+      "program": "/home/abdallah/Documents/PintOS/src/threads/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
