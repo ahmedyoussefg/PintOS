@@ -47,14 +47,14 @@ process_execute (const char *file_name)
 
   sema_down(&thread_current()->parent_child_sync);
 
+  if (tid == TID_ERROR){
+    palloc_free_page (fn_copy); 
+  }
+
   if (!thread_current()->latest_child_creation) // unsuccessful attempt
   {
 
     tid = TID_ERROR;
-  }
-
-  if (tid == TID_ERROR){
-    palloc_free_page (fn_copy); 
   }
   return tid;
 }
