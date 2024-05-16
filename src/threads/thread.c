@@ -760,6 +760,7 @@ update_priority(struct thread *t)
     }
     else
     {
+      // gets the max priority of the locks held by the thread
         int lock_priority = list_entry(list_max(&t->locks_aquired, &compare_locks, NULL), struct lock, elem)->max_priority;  //max priority of the locks held by the thread
         
         //updating the priority of the thread if the original priority is less than the lock priority assigne the lock priority to the thread
