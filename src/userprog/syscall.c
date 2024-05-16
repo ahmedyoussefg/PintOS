@@ -295,6 +295,7 @@ int read(int fd,void * buffer, unsigned size){
   * fd=1=>write to the console   (stdout)
   * fd>1=>read from the file     (file)
   */
+ if(size==0) return 0;
   if(fd==0){
     for(unsigned int i=0;i<size;i++){
       lock_acquire(&files_sync_lock);
@@ -477,8 +478,7 @@ struct open_file *get_file(int fd){
 
 /*VALID VOID POINTER*/
 void validate_void_ptr(void *ptr){
-  uint32_t * check =pagedir_get_page(thread_current()->pagedir, ptr);
-  if (ptr == NULL || !is_user_vaddr(ptr) || check == NULL ){
+  if (ptr == NULL || !is_user_vaddr(ptr) || pagedir_get_page(thread_current()->pagedir, ptr) == NULL ){
     exit(-1); // error
   }
 }
