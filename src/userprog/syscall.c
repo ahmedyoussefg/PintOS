@@ -295,20 +295,16 @@ int read(int fd,void * buffer, unsigned size){
   * fd=1=>write to the console   (stdout)
   * fd>1=>read from the file     (file)
   */
- if(size==0) return 0;
   if(fd==0){
     for(unsigned int i=0;i<size;i++){
       lock_acquire(&files_sync_lock);
-      ((char *)buffer)[i]=input_getc();
+      char c=input_getc();
       lock_release(&files_sync_lock);
+      buffer+=c;
     }
     return size;
   } 
-  else if(fd==1){
-    //Negative area 
-    return -1;
-  }
-  else{
+  else {
     //Get the file from fd by searching in the open_files list of the current thread
     struct open_file *file = get_file(fd);
     if(file==NULL){
@@ -450,9 +446,9 @@ void close(int fd){
     return;
   }
   list_remove(&file->elem);
-  // lock_acquire(&files_sync_lock);
+  lock_acquire(&files_sync_lock);
   file_close(file->file);
-  // lock_release(&files_sync_lock);
+  lock_release(&files_sync_lock);
 }
 
 /*=============================================================================*/
