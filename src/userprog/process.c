@@ -194,6 +194,7 @@ process_exit (void)
   {
     struct open_file *open = list_entry(list_pop_front(&cur->open_files), struct open_file, elem);
     file_close(open->file);
+    free(open);
   }
 
   if (thread_current()->executable != NULL)
