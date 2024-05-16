@@ -24,6 +24,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+void push_arguments( void **esp, int argc, char *argv[]);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -65,6 +66,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  printf("start_process\n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -97,7 +99,7 @@ start_process (void *file_name_)
 
       sema_up(&parent->parent_child_sync);
       sema_down(&thread_current()->parent_child_sync);
-
+      printf("success: in  %d\n", success);
 
     }
   }
@@ -114,15 +116,19 @@ start_process (void *file_name_)
 }
 
 /* Function to get the thread from tid, returns NULL if it doesnt exist*/
-/* Function to get the thread from tid, returns NULL if it doesn't exist */
-struct thread *get_child_thread(tid_t child_tid) {
-  struct thread *parent = thread_current();
-  struct list_elem *e;
-
-  for (e = list_begin(&parent->child_processes); e != list_end(&parent->child_processes); e = list_next(e)) {
-    struct thread *t = list_entry(e, struct thread, child_elem);
-    if (t->tid == child_tid)
-      return t;
+struct thread *get_child_thread(tid_t child_tid){
+  struct thread* parent= thread_current();
+  struct list_elem *head= list_begin(&parent->child_processes);
+  if (head != list_end (&parent->child_processes)) 
+  {
+    struct list_elem *e;
+    struct thread *t;
+    for (e = list_next (head); e != list_end (&parent->child_processes); e = list_next (e))
+    {
+      t=list_entry(e,struct thread, child_elem);
+      if (t->tid==child_tid)
+        return t;
+    }
   }
   return NULL; // not found
 }
@@ -155,7 +161,7 @@ process_wait (tid_t child_tid UNUSED)
   sema_down(&child->parent_process->wait_child);
   // reset waiting on which
   parent->waiting_on_which=-999;
-  
+  list_remove(&child->child_elem); // remove the child from parent's list of children
   return parent->child_status_after_wakeup;
 
 /*   while(true){
@@ -361,6 +367,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  printf("file_name: %s\n", argv[0]);
   file = filesys_open (argv[0]);
   if (file == NULL) 
     {
@@ -469,6 +476,67 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 
   return success;
+}
+
+void
+push_arguments( void **esp, int argc, char *argv[]){
+ void *stack_pointer = *esp;
+  int number_of_args = 0;
+  int all_args_size = 0;
+
+
+  char *stack_args = stack_pointer;
+
+  int align = (4 - (all_args_size % 4)) % 4;
+  if (align != 0)
+  {
+    stack_pointer -= align;
+    memset(stack_pointer, 0, align);
+  }
+
+  // Push NULL pointer at the end of args
+  stack_pointer -= sizeof(char *);
+  memset(stack_pointer, 0, sizeof(char *));
+
+uint32_t * arg_value_pointers[argc];
+
+  // Push addresses of args
+   for(int i = argc-1; i >= 0; i--)
+        {
+          /* Allocate enough space for the entire string (plus and extra byte for
+             '/0'). Copy the string to the stack, and add its reference to the array
+              of pointers. */
+          *esp = *esp - sizeof(char)*(strlen(argv[i])+1);
+          memcpy(*esp, argv[i], sizeof(char)*(strlen(argv[i])+1));
+          arg_value_pointers[i] = (uint32_t *)*esp;
+        }
+        /* Allocate space for & add the null sentinel. */
+        *esp = *esp - 4;
+        (*(int *)(*esp)) = 0;
+
+        /* Push onto the stack each char* in arg_value_pointers[] (each of which
+           references an argument that was previously added to the stack). */
+        *esp = *esp - 4;
+        for(int i = argc-1; i >= 0; i--)
+        {
+          (*(uint32_t **)(*esp)) = arg_value_pointers[i];
+          *esp = *esp - 4;
+        }
+
+        /* Push onto the stack a pointer to the pointer of the address of the
+           first argument in the list of arguments. */
+        (*(uintptr_t **)(*esp)) = *esp + 4;
+
+        /* Push onto the stack the number of program arguments. */
+        *esp = *esp - 4;
+        *(int *)(*esp) = argc;
+
+        /* Push onto the stack a fake return address, which completes stack initialization. */
+        *esp = *esp - 4;
+        (*(int *)(*esp)) = 0;
+
+    hex_dump((uintptr_t) (*esp - 64), *esp -64, 128, true);  
+
 }
 
 /* load() helpers. */
@@ -639,7 +707,7 @@ setup_stack (void **esp, int argc, char *argv[])
         palloc_free_page (kpage);
     }
 
-      //hex_dump((uintptr_t) (*esp), *esp, 128, true);  
+      hex_dump((uintptr_t) (*esp), *esp, 128, true);  
 
   return success;
 }
