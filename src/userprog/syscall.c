@@ -89,13 +89,31 @@ syscall_handler (struct intr_frame *f)
 
 // OUR syscalls implementation:
 /* Execute */
+/* Function that serves as a wrapper to execute a program. It is designed to be called
+   within an operating system kernel to manage program execution from system calls. */
 void execute_wrapper(struct intr_frame *f){
-  int *ptr=(int *)f->esp+1;
-  validate_void_ptr(ptr);
-  char *file_name = (char *) *ptr;
-  f->eax=execute(file_name); 
+  /* Retrieve the pointer to the first argument after the return address on the stack.
+     The interrupt frame's stack pointer ('esp') points to the return address. Incrementing
+     it by 1 accesses the next element on the stack, which is the first argument. */
+  int *ptr = (int *)f->esp + 1;
 
+  /* Validate the pointer to ensure it points to a valid memory location before dereferencing.
+     This is crucial to prevent the kernel from crashing due to invalid memory accesses. */
+  validate_void_ptr(ptr);
+
+  /* Dereference the pointer to obtain the file name intended for execution. The pointer
+     is cast to a 'char *' because system calls related to file operations typically
+     expect string arguments. */
+  char *file_name = (char *) *ptr;
+
+  /* Call the 'execute' function with the file name. The 'execute' function is expected
+     to handle the actual process creation and execution. The return value of 'execute'
+     is typically the process ID (PID) of the newly created process, or an error code if
+     the execution fails. This return value is stored in the 'eax' register of the
+     interrupt frame to pass it back to the caller, adhering to the system calling convention. */
+  f->eax = execute(file_name); 
 }
+
 
 pid_t execute(char *file_name){
   return process_execute(file_name);

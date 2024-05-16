@@ -45,7 +45,7 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
 
-  sema_down(&thread_current()->parent_child_sync);
+  sema_down(&thread_current()->parent_child_sync); // block the parent until child is created successfully in start_process
 
   if (tid == TID_ERROR){
     palloc_free_page (fn_copy); 
@@ -444,7 +444,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   
-  if (success){
+  if (success){ 
     file_deny_write(file);
 
       thread_current()->executable = file;
@@ -569,41 +569,41 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
+/* Function to initialize the stack for a new process. It sets up the initial stack frame,
+   including command line arguments. */
 static bool
 setup_stack (void **esp, int argc, char *argv[])
 {
-  uint8_t *kpage;
-  bool success = false;
+  uint8_t *kpage;  // Pointer to the kernel page.
+  bool success = false;  // Status flag for successful operations.
 
+  /* Allocate a page, setting it for user mode and initializing it to zero. */
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL)
     {
+      /* Install the page at an address just below PHYS_BASE. */
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
       {
-        
-        /* Offset PHYS_BASE as instructed. */
+        /* Set the initial stack pointer. Offset from PHYS_BASE by 12 for alignment. */
         *esp = PHYS_BASE - 12;
-        /* A list of addresses to the values that are intially added to the stack.  */
+        /* Array to hold pointers to the command line arguments on the stack. */
         uint32_t * arg_value_pointers[argc];
 
-        /* First add all of the command line arguments in descending order, including
-           the program name. */
+        /* Push each argument onto the stack in reverse order, starting from the last argument. */
         for(int i = argc-1; i >= 0; i--)
         {
-          /* Allocate enough space for the entire string (plus and extra byte for
-             '/0'). Copy the string to the stack, and add its reference to the array
-              of pointers. */
+          /* Calculate the space needed for each argument string, including the null terminator. */
           *esp = *esp - sizeof(char)*(strlen(argv[i])+1);
+          /* Copy the string to the stack and store the location in arg_value_pointers. */
           memcpy(*esp, argv[i], sizeof(char)*(strlen(argv[i])+1));
           arg_value_pointers[i] = (uint32_t *)*esp;
         }
-        /* Allocate space for & add the null sentinel. */
+        /* Push a null sentinel to mark the end of the arguments array for standard C argv[] handling. */
         *esp = *esp - 4;
         (*(int *)(*esp)) = 0;
 
-        /* Push onto the stack each char* in arg_value_pointers[] (each of which
-           references an argument that was previously added to the stack). */
+        /* Push pointers to the arguments onto the stack. */
         *esp = *esp - 4;
         for(int i = argc-1; i >= 0; i--)
         {
@@ -611,26 +611,30 @@ setup_stack (void **esp, int argc, char *argv[])
           *esp = *esp - 4;
         }
 
-        /* Push onto the stack a pointer to the pointer of the address of the
-           first argument in the list of arguments. */
+        /* Push a pointer to the beginning of the arguments pointers (effectively, the start of argv). */
         (*(uintptr_t **)(*esp)) = *esp + 4;
 
-        /* Push onto the stack the number of program arguments. */
+        /* Push the number of arguments (argc) onto the stack. */
         *esp = *esp - 4;
         *(int *)(*esp) = argc;
 
-        /* Push onto the stack a fake return address, which completes stack initialization. */
+        /* Push a fake return address to maintain stack alignment and proper call structure. */
         *esp = *esp - 4;
         (*(int *)(*esp)) = 0;
       }
       else
+      {
+        /* If page installation fails, free the allocated page. */
         palloc_free_page (kpage);
+      }
     }
 
-      //hex_dump((uintptr_t) (*esp), *esp, 128, true);  
+  /* Uncomment to debug the initial stack state.
+     hex_dump((uintptr_t) (*esp), *esp, 128, true); */
 
-  return success;
+  return success;  // Return the status of stack setup.
 }
+
 
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
