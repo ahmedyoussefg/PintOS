@@ -80,14 +80,12 @@ start_process (void *file_name_)
 
   if (parent != NULL) // if he has parent
     parent->latest_child_creation=success; // set success state
-
-  
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) {
     if (parent != NULL)
       sema_up(&parent->parent_child_sync);
-      thread_exit ();
+    thread_exit();
   }
   else
   {
@@ -202,8 +200,6 @@ process_exit (void)
     file_close(thread_current()->executable);
     cur->executable = NULL;
   }
-  
-  
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
