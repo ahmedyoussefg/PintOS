@@ -171,6 +171,7 @@ void create_wrapper(struct intr_frame *f){
   int *ptr1=(int *)f->esp+1;
   validate_void_ptr(ptr1);
   char *file_name=(char *)*ptr1;
+  validate_void_ptr(file_name);
   int *ptr2=(int *)f->esp + 2;
   validate_void_ptr(ptr2);
   unsigned initial_size= (unsigned) *ptr2;
@@ -216,6 +217,7 @@ void open_wrapper(struct intr_frame *f){
   int *ptr=(int *)f->esp+1;
   validate_void_ptr(ptr);
   char *file_name=(char *)*ptr;
+  validate_void_ptr(file_name);
   f->eax=open(file_name);
 }
 
