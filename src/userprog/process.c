@@ -79,12 +79,9 @@ start_process (void *file_name_)
 
   if (parent != NULL) // if he has parent
     parent->latest_child_creation=success; // set success state
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
   if (!success) {
     if (parent != NULL)
       sema_up(&parent->parent_child_sync);
-    thread_exit();
   }
   else
   {
@@ -99,7 +96,11 @@ start_process (void *file_name_)
     }
   }
 
-  
+  if(!success){
+    /* If load failed, quit. */
+    palloc_free_page (file_name);
+    thread_exit();
+  }
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
