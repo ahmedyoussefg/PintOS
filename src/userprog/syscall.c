@@ -147,8 +147,9 @@ void exit(int status){
   // wake up all children (if exist)
   struct thread* current= thread_current();
   // process_exit(); (RELEASE ALL RESOURCES-- called inside process_exit())
-  
-  process_exit();
+  printf("%s: exit(%d)\n", current->filename, status);
+
+  // process_exit();
 
   // TODO: now iterate over each element in open_file and call close(e->fd)
 
@@ -159,7 +160,6 @@ void exit(int status){
       parent->child_status_after_wakeup=status;
     }
   }
-  printf("%s: exit(%d)\n", current->filename, status);
   // call exit_thread();
   thread_exit();  
 }
@@ -229,13 +229,16 @@ int open(const char *file){
     return -1;
   }
 
-  struct open_file *thread_files=(struct open_file *)malloc(sizeof(struct open_file));
-
-  thread_files->file=opened_file;
+  struct open_file *file_to_open=(struct open_file *)malloc(sizeof(struct open_file));
   int temp_fd=current_fd;
-  thread_files->fd=current_fd;
+
+  file_to_open->file=opened_file;
+  file_to_open->fd=current_fd;
+  lock_acquire(&files_sync_lock);
   current_fd++;
-  list_push_back(&thread_current()->open_files,&thread_files->elem);
+  lock_release(&files_sync_lock);
+  struct list_elem *element=&file_to_open->elem;
+  list_push_back(&thread_current()->open_files,element);
 
   return temp_fd;
 }
@@ -252,11 +255,11 @@ void filesize_wrapper(struct intr_frame *f){
 }
 
 int size(int fd){
-  struct file *file = get_file(fd);
+  struct open_file *file = get_file(fd);
   if(file==NULL){
     return -1;
   }
-  return file_length(file);
+  return file_length(file->file);
 }
 
 /*=============================================================================*/
@@ -277,6 +280,7 @@ void read_wrapper(struct intr_frame *f){
   int *ptr2=(int *)f->esp+2;
   validate_void_ptr(ptr2);
   void *buffer = (void *) *ptr2;
+  validate_void_ptr(buffer);
   int *ptr3=(int *)f->esp+3;
   validate_void_ptr(ptr3);
   unsigned size=(unsigned) *ptr3;
@@ -303,12 +307,12 @@ int read(int fd,void * buffer, unsigned size){
   }
   else{
     //Get the file from fd by searching in the open_files list of the current thread
-    struct file *file = get_file(fd);
+    struct open_file *file = get_file(fd);
     if(file==NULL){
       return -1;
     }
     lock_acquire(&files_sync_lock);
-    int bytes_read=file_read(file,buffer,size);
+    int bytes_read=file_read(file->file,buffer,size);
     lock_release(&files_sync_lock);
     return bytes_read;
   }       
@@ -327,11 +331,14 @@ void write_wrapper(struct intr_frame *f){
   int *ptr1=(int *)f->esp+1;
   validate_void_ptr(ptr1);
   int fd=(int)*ptr1;
-
+  if(fd==0) {
+    exit(-1);
+    return;
+  }
   int *ptr2=(int *)f->esp+2;
   validate_void_ptr(ptr2);
   void *buffer=(void *)*ptr2;
-
+  validate_void_ptr(buffer);
   int *ptr3=(int *)f->esp+3;
   validate_void_ptr(ptr3);
   unsigned size=(unsigned) *ptr3;
@@ -350,17 +357,20 @@ int write(int fd, const void *buffer, unsigned size){
   up interleaved on the console, confusing both human readers and our grading scripts.
   */
   if(fd==1){
+    lock_acquire(&files_sync_lock);
      putbuf(buffer,size);
+    lock_release(&files_sync_lock);
+
      number_of_bytes_written=size;  
   }
   else{
-    struct file *file = get_file(fd);
+    struct open_file *file = get_file(fd);
     if(file==NULL){
-      return 0;
+      return -1;
     }
     // struct thread *current=thread_current();
     lock_acquire(&files_sync_lock);
-    number_of_bytes_written=file_write(file,buffer,size);
+    number_of_bytes_written=file_write(file->file,buffer,size);
     lock_release(&files_sync_lock);
   }
   return number_of_bytes_written;
@@ -386,12 +396,12 @@ void seek_wrapper(struct intr_frame *f){
   seek(fd,position);
 }
 void seek(int fd,unsigned position){
-  struct file *seeked_file=get_file(fd);
+  struct open_file *seeked_file=get_file(fd);
   if(seeked_file==NULL){
     return;
   }
   lock_acquire(&files_sync_lock);
-  file_seek(seeked_file,position);
+  file_seek(seeked_file->file,position);
   lock_release(&files_sync_lock);
 }
 
@@ -409,11 +419,11 @@ void tell_wrapper(struct intr_frame *f){
 }
 
 unsigned tell(int fd){
-  struct file *file=get_file(fd);
+  struct open_file *file=get_file(fd);
   if(file==NULL){
     return INVALID_POSITION;
   }
-  return file_tell(file);
+  return file_tell(file->file);
 }
 
 /*=============================================================================*/
@@ -431,11 +441,15 @@ void close_wrapper(struct intr_frame *f){
   close(fd);
 }
 void close(int fd){
-  struct file *file=get_file(fd);
+  struct open_file *file=get_file(fd);
   if(file==NULL){
+    exit(-1);
     return;
   }
-  file_close(file);
+  list_remove(&file->elem);
+  // lock_acquire(&files_sync_lock);
+  file_close(file->file);
+  // lock_release(&files_sync_lock);
 }
 
 /*=============================================================================*/
@@ -443,7 +457,7 @@ void close(int fd){
 /*HELPER FUNCTIONS*/
 
 /*GET FILE FROM THE FILE DESCRIPTOR*/
-struct file *get_file(int fd){
+struct open_file *get_file(int fd){
 
   struct thread* current_thread=thread_current();
   struct list_elem *e;
@@ -452,7 +466,7 @@ struct file *get_file(int fd){
       e=list_next(e)){
       struct open_file *opened_file=list_entry(e,struct open_file,elem);
       if(opened_file->fd==fd){
-        return opened_file->file;
+        return opened_file;
       }
   }
   return NULL;
@@ -461,7 +475,7 @@ struct file *get_file(int fd){
 
 /*VALID VOID POINTER*/
 void validate_void_ptr(void *ptr){
-  uint32_t * check =lookup_page(thread_current()->pagedir, ptr, false);
+  uint32_t * check =pagedir_get_page(thread_current()->pagedir, ptr);
   if (ptr == NULL || !is_user_vaddr(ptr) || check == NULL ){
     exit(-1); // error
   }
